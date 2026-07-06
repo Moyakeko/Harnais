@@ -9,10 +9,11 @@
 
 ## Niveau / statut actuel
 
-Socle V1.4 **stable** — sécurité durcie (V1.3) puis outillé pour la suite (V1.4), et
-vérifié en session fraîche le 2026-07-06 : hook de garde (127/127 + tests live Bash et
-PowerShell), `permissions.deny` (lecture d'un `id_rsa` de test refusée dans le projet),
-`disableBypassPermissionsMode` (bypass neutralisé), session ID injecté au démarrage.
+Socle V1.5 — **installable en une ligne sur n'importe quel projet** (dépôt public
+`github.com/Moyakeko/Harnais`, bootstraps `install.ps1`/`install.sh` + moteur de
+fusion additive `install/apply.js`), coexistence avec d'autres méthodes (BMAD/GSD)
+par fusion à marqueurs. Faux positif `git add` du hook corrigé (V1.4 vérifiée en
+session fraîche le même jour : deny, anti-bypass, session ID — tout tient).
 
 ## Fait
 
@@ -23,8 +24,8 @@ PowerShell), `permissions.deny` (lecture d'un `id_rsa` de test refusée dans le 
   `session-log.md` exclu).
 - Hook `guard-dangerous-commands.js` V2 : 5 catégories (suppression récursive large,
   destruction de disque, git destructif, code téléchargé pipé, fichiers secrets via
-  shell). Batterie de tests **versionnée** : `.claude/hooks/tests/test-guard.js`,
-  127/127 OK.
+  shell). V1.5 : règle git add testée sur les arguments par segment (faux positif
+  message-de-commit corrigé). Batterie versionnée : 138/138.
 - `permissions.deny` étendu (29 règles) + `disableBypassPermissionsMode: "disable"`.
 - 7 skills : `onboard-project`, `dev-cycle`, `security-audit` (pièges du code IA +
   escalade `/security-review`), `sandbox-pretest` (nouveau — isolation Docker avant
@@ -34,8 +35,13 @@ PowerShell), `permissions.deny` (lecture d'un `id_rsa` de test refusée dans le 
 - 2 sous-agents : `code-reviewer`, `debugger`.
 - Hooks `session-start-inject.js` (V1.4 : injecte aussi le session ID) et
   `precompact-safety-net.js`.
-- `README.md` (notice d'utilisation orientée humain) ; dépôt distant privé
-  `github.com/Moyakeko/Harnais` (`origin`), audit sécurité passé avant premier push.
+- `README.md` (notice d'utilisation orientée humain) ; dépôt `github.com/Moyakeko/
+  Harnais` **public** (audit de l'historique complet passé avant publication).
+- V1.5 : installeur one-liner (`install.ps1`/`install.sh` → `install/apply.js` :
+  fusion additive à marqueurs `harnais:`, deny par union, anti-bypass forcé,
+  `.harnais-bak`, idempotent, `.claude/harnais.version`) ; `templates/SESSION.md`
+  vierge ; E2E validé depuis GitHub (sh + PowerShell, scénarios vierge et
+  pseudo-BMAD, double exécution) ; section « Couche distribution » dans EVOLUTION.md.
 
 ## En cours / bloqué
 
@@ -43,9 +49,9 @@ Rien de bloquant.
 
 ## Prochaines étapes
 
-- Éventuel raffinement du hook de garde : faux positif constaté quand un message de
-  commit contient un nom de fichier secret (ex. le nom d'une clé SSH) dans la même
-  ligne qu'un `git add` — à couvrir dans la batterie de tests si on le corrige.
+- Vérifier (fait en session, à re-confirmer à l'occasion) que le one-liner raw
+  fonctionne une fois le cache CDN rafraîchi — le contenu poussé est correct, seul
+  le cache servait l'ancienne version pendant ~5 min.
 - Futur skill "checkpoint" (retour arrière inter-sessions) : à construire comme
   surcouche fine de git — cadrage déjà écrit dans `EVOLUTION.md`, passer par
   `skill-builder`.
@@ -72,6 +78,6 @@ Rien de bloquant.
 
 ## Dernier checkpoint
 
-2026-07-06 — V1.4 stable (vérifications toutes passées) + README/notice créé + dépôt
-distant privé `Moyakeko/Harnais` initialisé et poussé après security-audit. Détail
-dans `.claude/session-log.md`.
+2026-07-06 — V1.5 : socle installable en une ligne (dépôt public, bootstraps +
+apply.js, fusion additive, E2E validé depuis GitHub) + fix du faux positif git add
+(138/138). 7 commits, un par changement. Détail dans `.claude/session-log.md`.
