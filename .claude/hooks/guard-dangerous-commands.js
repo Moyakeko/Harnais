@@ -136,6 +136,25 @@ function mentionsSecretFile(cmd) {
   return SECRET_FILE_RES.some((re) => re.test(cmd));
 }
 
+// git add dont un ARGUMENT est un fichier secret. Testé argument par argument
+// (par segment, comme rmBroad) et non sur la commande entière : un nom de
+// secret dans un message de commit voisin (`git add doc.md && git commit -m
+// "rotation id_rsa"`) ne doit pas bloquer — faux positif corrigé en V1.5.
+// `git add .`/-A reste permissif : le .gitignore du socle et permissions.deny
+// couvrent déjà le staging global, et le hook ne peut pas inspecter l'arbre.
+function gitAddSecret(cmd) {
+  return segments(cmd).some((seg) => {
+    const tokens = seg.split(/\s+/);
+    const i = tokens.findIndex((t) => /^git(\.exe)?$/i.test(stripQuotes(t)));
+    if (i === -1 || !/^add$/i.test(stripQuotes(tokens[i + 1] || ""))) return false;
+    return tokens
+      .slice(i + 2)
+      .map(stripQuotes)
+      .filter((a) => a && !a.startsWith("-"))
+      .some((a) => SECRET_FILE_RES.some((re) => re.test(a)));
+  });
+}
+
 const READ_CMD_RE =
   /(^|[|&;(]\s*|\b(sudo|xargs)\s+)(cat|type|more|less|head|tail|bat|nl|tac|strings|xxd|od|hexdump|base64|grep|egrep|fgrep|rg|sed|awk|cut|findstr|gc|Get-Content|Select-String|sls|Import-Csv)(\.exe)?\b/i;
 
@@ -222,7 +241,7 @@ const RULES = [
   },
   {
     name: "git add d'un fichier secret",
-    test: (cmd) => /\bgit\s+add\b/i.test(cmd) && mentionsSecretFile(cmd),
+    test: gitAddSecret,
   },
 ];
 

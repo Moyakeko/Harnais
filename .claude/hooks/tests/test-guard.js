@@ -147,6 +147,20 @@ const CASES = [
   ["git add src/", false],
   ["git add .", false],
   ["git add .env.example", false],
+  // --- git add + nom de secret ailleurs dans la commande (message de commit…) :
+  // AUTORISÉ — faux positif V1.4 corrigé (le test porte sur les arguments du add) ---
+  ['git add README.md && git commit -m "docs: rotation id_rsa"', false],
+  ['git add src/config.js && git commit -m "ne lit plus .env en prod"', false],
+  ['git commit -m "fix: gestion des .pem expirés"', false],
+  ['git add -A && git commit -m "gitignore id_ed25519"', false],
+  ["git add -A", false],
+  // --- git add d'un secret : TOUJOURS BLOQUÉ ---
+  ['git add .env && git commit -m "wip"', true],
+  ["git add -f .env", true],
+  ['git add "config/.env.production"', true],
+  ["git add deploy.pem src/", true],
+  ["git add secrets/token.txt", true],
+  ["echo ok && git add ~/.ssh/id_ed25519", true],
 ];
 
 let pass = 0;
