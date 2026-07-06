@@ -1,0 +1,69 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-dangerous-commands.js\""
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start-inject.js\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/precompact-safety-net.js\""
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "disableBypassPermissionsMode": "disable",
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/.envrc)",
+      "Read(**/secrets/**)",
+      "Read(**/*credential*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/*.pfx)",
+      "Read(**/*.p12)",
+      "Read(**/*.keystore)",
+      "Read(**/*.jks)",
+      "Read(**/*.tfstate)",
+      "Read(**/*.tfstate.*)",
+      "Read(**/id_rsa*)",
+      "Read(**/id_dsa*)",
+      "Read(**/id_ecdsa*)",
+      "Read(**/id_ed25519*)",
+      "Read(**/.npmrc)",
+      "Read(**/.netrc)",
+      "Read(**/.pgpass)",
+      "Read(**/.git-credentials)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.kube/**)",
+      "Read(~/.gnupg/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.docker/config.json)"
+    ]
+  }
+}

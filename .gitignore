@@ -1,0 +1,26 @@
+# Secrets — jamais versionnés (le socle les bloque aussi en lecture, ceinture + bretelles)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+secrets/
+credentials*.json
+
+# Historique local — le filet PreCompact y copie des extraits bruts de transcript,
+# potentiellement sensibles : reste sur cette machine, jamais sur un remote.
+.claude/session-log.md
+
+# Config Claude Code propre à la machine (pas au socle)
+.claude/settings.local.json
+
+# Dépendances / bruit (par stack, au cas où un projet dérivé garde ce fichier)
+node_modules/
+__pycache__/
+venv/
+.venv/
+target/
+dist/
+build/
