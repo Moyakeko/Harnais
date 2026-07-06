@@ -34,6 +34,8 @@ PowerShell), `permissions.deny` (lecture d'un `id_rsa` de test refusée dans le 
 - 2 sous-agents : `code-reviewer`, `debugger`.
 - Hooks `session-start-inject.js` (V1.4 : injecte aussi le session ID) et
   `precompact-safety-net.js`.
+- `README.md` (notice d'utilisation orientée humain) ; dépôt distant privé
+  `github.com/Moyakeko/Harnais` (`origin`), audit sécurité passé avant premier push.
 
 ## En cours / bloqué
 
@@ -41,6 +43,9 @@ Rien de bloquant.
 
 ## Prochaines étapes
 
+- Éventuel raffinement du hook de garde : faux positif constaté quand un message de
+  commit contient un nom de fichier secret (ex. le nom d'une clé SSH) dans la même
+  ligne qu'un `git add` — à couvrir dans la batterie de tests si on le corrige.
 - Futur skill "checkpoint" (retour arrière inter-sessions) : à construire comme
   surcouche fine de git — cadrage déjà écrit dans `EVOLUTION.md`, passer par
   `skill-builder`.
@@ -67,6 +72,6 @@ Rien de bloquant.
 
 ## Dernier checkpoint
 
-2026-07-06 — Vérifications session fraîche V1.4 toutes passées (hook live, deny,
-bypass, session ID) ; deux limites documentées (deny relatif au projet, bypass
-neutralisé sans erreur). V1.4 déclarée stable. Détail dans `.claude/session-log.md`.
+2026-07-06 — V1.4 stable (vérifications toutes passées) + README/notice créé + dépôt
+distant privé `Moyakeko/Harnais` initialisé et poussé après security-audit. Détail
+dans `.claude/session-log.md`.
