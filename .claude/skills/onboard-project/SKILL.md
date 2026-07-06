@@ -39,7 +39,11 @@ reposer les questions.
 4. Écris un `PROJECT.md` court à la racine (10-20 lignes, pas plus) avec ces réponses.
    Ne duplique pas ce que `CLAUDE.md` couvre déjà (les règles non négociables restent
    dans `CLAUDE.md`, pas ici).
-5. Explique en une phrase à l'utilisateur ce que ça change concrètement pour la suite
+5. Propose un smoke test du socle fraîchement installé :
+   `node .claude/hooks/tests/test-guard.js` — doit afficher N/N tests OK. C'est le
+   smoke test décrit dans `EVOLUTION.md` ; deux minutes, et on sait que la couche de
+   garde tient sur ce projet et cette machine.
+6. Explique en une phrase à l'utilisateur ce que ça change concrètement pour la suite
    (ex: "comme c'est noté avec une deadline, je vais éviter les refactors non demandés
    et prioriser un code qui marche et qui respecte l'énoncé").
 
