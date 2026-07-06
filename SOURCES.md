@@ -118,3 +118,35 @@ l'auto-application par un script de changements sur les hooks/`settings.json`/r�
 CLAUDE.md (interdit par invariant — un script propose, l'humain applique) ;
 `session-log.md` versionné dans git (le filet PreCompact y copie des extraits bruts de
 transcript, potentiellement sensibles — il reste local, dans `.gitignore`).
+
+### V1.5 — socle installable en une ligne, fix du hook git add (2026-07-06)
+
+**Origine** : demande directe de l'utilisateur — réutiliser le socle sur chaque nouveau
+projet sans cloner le repo (le projet cible a son propre remote git), avec coexistence
+possible avec d'autres méthodes (BMAD, GSD…) : le socle est la couche
+architecture/cybersécurité de base, les méthodes de construction viennent par-dessus.
+
+**Retenu** :
+- **Dépôt public** + one-liners sans authentification (`curl … | sh`,
+  `iwr … | iex`) — le socle ne contient aucun secret (audité), seul son design est
+  exposé, et ça le rend partageable.
+- **Bootstraps minces + moteur Node unique** (`install/apply.js`) : la fusion JSON est
+  triviale en Node et quasi impossible en sh pur ; Node est déjà le prérequis des
+  hooks ; une seule implémentation à maintenir ; zéro écriture de fichier côté
+  PowerShell donc zéro problème de BOM/UTF-16.
+- **Fusion additive à marqueurs** (`harnais:core` dans CLAUDE.md, `harnais:guard` dans
+  .gitignore, clé `command` pour les hooks JSON, union pour deny) : jamais de
+  remplacement de l'existant, backup `.harnais-bak` unique, idempotence par
+  construction — relancer le one-liner = mise à jour.
+- **Fix du faux positif `git add`** : la règle teste désormais les arguments du
+  `git add` segment par segment (comme les prédicats rm), plus la commande entière —
+  un nom de secret dans un message de commit voisin ne bloque plus. 11 cas de test
+  ajoutés (138/138).
+- `git add .`/`-A` **reste permissif** : le .gitignore posé par le socle,
+  `permissions.deny` et `security-audit` couvrent déjà le staging global, et le hook
+  ne peut pas inspecter l'arbre de travail.
+
+**Écarté** : un dépôt template GitHub ("Use this template" — crée un repo entier au
+lieu de s'ajouter à un projet existant) ; git submodule/subtree (couple le projet au
+repo du socle, exactement ce que l'utilisateur voulait éviter) ; un installeur tout
+PowerShell ou tout bash (double implémentation de la fusion, divergence garantie).

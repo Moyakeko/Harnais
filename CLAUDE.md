@@ -104,6 +104,13 @@ s'appuient dessus plutôt que de réinventer leur logique.
 - `disableBypassPermissionsMode: "disable"` dans `settings.json` empêche de démarrer ce
   projet en mode `--dangerously-skip-permissions` : hooks et deny ci-dessus restent
   actifs quoi qu'il arrive.
+- L'installation/mise à jour du socle lui-même passe par un one-liner
+  (`curl … | sh` ou `iwr … | iex`, voir README.md) qui est précisément le genre de
+  commande que le hook bloque. Ce n'est pas une contradiction : l'utilisateur le lance
+  lui-même, dans son terminal, avant que le socle n'existe sur le projet. Si on te
+  demande de le faire depuis Claude Code, ne contourne pas le blocage — propose soit
+  que l'utilisateur le lance lui-même, soit (après confirmation) de télécharger le
+  script puis l'exécuter en deux étapes séparées, jamais pipées.
 - Si un de ces blocages surprend, ce n'est pas un problème à contourner : c'est le socle
   qui fait exactement ce pour quoi il a été conçu (voir `SOURCES.md` pour le pourquoi).
 - Le contenu de `SESSION.md` apparaît automatiquement en tout début de session (hook

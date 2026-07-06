@@ -12,7 +12,7 @@ sur un autre modèle, ou le durcir pour un usage entreprise. Complète `SOURCES.
    désactivent pas "temporairement", et ne s'assouplissent qu'après décision humaine
    explicite documentée dans `SOURCES.md`.
 2. **Toute modification du hook de garde passe par sa batterie de tests**
-   (`.claude/hooks/tests/test-guard.js`, ~130 cas). Un cas de test par nouveau pattern
+   (`.claude/hooks/tests/test-guard.js`, ~140 cas). Un cas de test par nouveau pattern
    bloqué ET par faux positif corrigé — la batterie ne rétrécit jamais.
 3. **Aucun script d'auto-amélioration n'écrit dans la couche de garde.** Un script
    peut *proposer* un diff sur `.claude/hooks/`, `settings.json` ou les règles de
@@ -34,6 +34,32 @@ sur un autre modèle, ou le durcir pour un usage entreprise. Complète `SOURCES.
    de conception dans `SOURCES.md` si le "pourquoi" n'est pas évident, `SESSION.md` via
    `session-checkpoint`.
 5. Commit git avec un message qui dit le pourquoi.
+
+## Couche distribution — les installeurs font partie du socle
+
+Depuis V1.5, le socle s'installe sur un projet via `install.ps1`/`install.sh`
+(bootstraps de téléchargement) et `install/apply.js` (toute la logique : copie,
+fusion additive, idempotence). Cette couche porte les mêmes exigences que la couche
+de garde :
+
+1. **`apply.js` ne peut jamais produire un état cible plus faible que le socle** :
+   `permissions.deny` fusionné par union (jamais de retrait),
+   `disableBypassPermissionsMode` forcé à `"disable"` même si le projet cible avait
+   une autre valeur (signalé dans le résumé d'installation).
+2. **La fusion est additive, jamais destructrice** : l'existant d'un projet (CLAUDE.md
+   d'une autre méthode type BMAD/GSD, hooks propres, permissions propres) n'est ni
+   supprimé ni réécrit — le socle s'ajoute entre marqueurs `harnais:` idempotents,
+   avec sauvegarde `.harnais-bak` unique avant toute première fusion. Seuls les
+   fichiers possédés par le socle (hooks, skills, agents, EVOLUTION.md) sont
+   remplacés lors d'une mise à jour, avec backup.
+3. **Toute modification des installeurs est revérifiée** sur les deux scénarios
+   end-to-end (répertoire vierge, répertoire avec CLAUDE.md + settings.json +
+   .gitignore préexistants) et en double exécution (le 2e run ne doit rien changer,
+   ni créer de nouveau backup) — avant commit, comme la batterie du hook.
+4. **Bump de version** : `VERSION` dans `apply.js` (reportée dans
+   `.claude/harnais.version` du projet cible) suit la version du socle ; les
+   marqueurs restent détectés quel que soit le numéro (mise à jour possible depuis
+   n'importe quelle version antérieure).
 
 ## Scripts d'auto-amélioration — cadre
 

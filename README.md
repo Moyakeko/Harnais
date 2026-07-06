@@ -5,7 +5,8 @@ d'école, projet perso, service déployé pour soi ou ses proches) avec des gard
 sécurité et une méthode de travail déjà en place. Ce dépôt n'est **pas** un projet
 applicatif : c'est le moule que l'on copie au départ de chaque nouveau projet.
 
-Version courante : **V1.4 (stable)** — vérifiée en session fraîche le 2026-07-06.
+Version courante : **V1.5** — installable en une ligne (voir ci-dessous) ; V1.4
+vérifiée en session fraîche le 2026-07-06.
 
 ## À qui s'adressent les fichiers
 
@@ -17,17 +18,51 @@ Version courante : **V1.4 (stable)** — vérifiée en session fraîche le 2026-
 | `SOURCES.md` | Toi | D'où viennent les choix de conception (sources + décisions propres). |
 | `EVOLUTION.md` | Les deux | Invariants à respecter pour toute évolution du socle lui-même. |
 
-## Démarrer un nouveau projet sur ce socle
+## Installer le socle sur un nouveau projet (une ligne)
 
-1. **Copier le socle** dans le dossier du nouveau projet :
-   - le dossier `.claude/` complet (settings, hooks, skills, agents) ;
-   - `CLAUDE.md`, `EVOLUTION.md`, `.gitignore` ;
-   - `SESSION.md` vidé de son contenu spécifique (garder les titres de sections).
-   - Ne PAS copier : `SOURCES.md` (documentation du socle, pas du projet),
-     `.claude/session-log.md` (historique local, hors git de toute façon).
-2. **Ouvrir Claude Code** dans le dossier et lancer la skill `onboard-project` : elle
-   crée un `PROJECT.md` court (nature du projet, stack, contraintes, cible de
-   déploiement).
+Dans le dossier du projet (nouveau ou existant), **dans ton terminal** — prérequis :
+Node.js installé.
+
+PowerShell (Windows) :
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/Moyakeko/Harnais/main/install.ps1 | iex
+```
+
+Bash/sh (Linux, macOS, Git Bash) :
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Moyakeko/Harnais/main/install.sh | sh
+```
+
+> **Note contre-intuitive assumée** : cette commande « code téléchargé pipé dans un
+> shell » est précisément ce que le hook du socle bloquera *ensuite* dans Claude Code.
+> C'est cohérent : tu la lances toi-même, dans ton terminal, avant que le socle
+> n'existe sur le projet — c'est la philosophie du socle (les installateurs, c'est
+> l'humain qui les lance).
+
+Ce que fait l'installeur (`install/apply.js`, invoqué par les deux scripts) :
+
+| Fichier | Traitement |
+|---|---|
+| `.claude/hooks/`, `.claude/skills/`, `.claude/agents/`, `EVOLUTION.md` | Copiés (possédés par le socle). En cas de mise à jour d'un fichier modifié : sauvegarde `.harnais-bak` puis remplacement. |
+| `SESSION.md` | Créé vierge depuis un template — **jamais touché** s'il existe déjà. |
+| `CLAUDE.md`, `.gitignore` | Fusion additive entre marqueurs `harnais:` — un CLAUDE.md existant (BMAD, GSD…) est conservé intact, le bloc socle s'ajoute à la fin. |
+| `.claude/settings.json` | Fusion JSON : hooks ajoutés à côté des existants, `permissions.deny` par union, anti-bypass forcé — jamais de retrait. |
+| `README.md`, `SOURCES.md`, `SESSION.md` du socle, `install.*` | Jamais installés (documentation du socle, pas du projet). |
+
+L'installation est **idempotente** : relancer le one-liner met à jour le socle
+(remplacement entre marqueurs) sans dupliquer ni écraser ce qui appartient au projet.
+La version installée est dans `.claude/harnais.version`. Les `.harnais-bak` gardent
+l'état d'origine d'avant la première installation.
+
+Puis :
+
+1. **Ouvrir Claude Code** dans le dossier et dire « onboard ce projet » : la skill
+   `onboard-project` crée un `PROJECT.md` court (nature du projet, stack, contraintes,
+   cible de déploiement) — c'est là que le socle s'adapte au projet, sans modifier les
+   règles non négociables.
+2. Smoke test : `node .claude/hooks/tests/test-guard.js` (doit afficher `138/138`).
 3. Travailler normalement — le socle fait le reste (voir la notice ci-dessous).
 
 ## Ce que contient le socle
@@ -40,7 +75,7 @@ Version courante : **V1.4 (stable)** — vérifiée en session fraîche le 2026-
   - `guard-dangerous-commands.js` — bloque par exit code, même en auto-approve,
     5 catégories : suppression récursive large, destruction de disque, git destructif,
     code téléchargé pipé dans un shell, fichiers secrets via le shell. Batterie de
-    tests versionnée dans `.claude/hooks/tests/test-guard.js` (127 cas).
+    tests versionnée dans `.claude/hooks/tests/test-guard.js` (138 cas).
   - `session-start-inject.js` — injecte `SESSION.md` + l'ID de session au démarrage.
   - `precompact-safety-net.js` — filet de sécurité avant compactage du contexte.
 - **29 règles `permissions.deny`** (`.claude/settings.json`) : Claude ne peut pas lire
