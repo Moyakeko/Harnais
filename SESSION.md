@@ -49,9 +49,6 @@ Rien de bloquant.
 
 ## Prochaines étapes
 
-- Vérifier (fait en session, à re-confirmer à l'occasion) que le one-liner raw
-  fonctionne une fois le cache CDN rafraîchi — le contenu poussé est correct, seul
-  le cache servait l'ancienne version pendant ~5 min.
 - Futur skill "checkpoint" (retour arrière inter-sessions) : à construire comme
   surcouche fine de git — cadrage déjà écrit dans `EVOLUTION.md`, passer par
   `skill-builder`.
