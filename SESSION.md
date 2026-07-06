@@ -9,10 +9,10 @@
 
 ## Niveau / statut actuel
 
-Socle V1.4 — sécurité durcie (V1.3) puis outillé pour la suite (V1.4) : pré-test
-sandboxé avant déploiement, guide d'évolution (`EVOLUTION.md`), git initialisé comme
-mécanisme de checkpoint/rollback, traçabilité date + session ID sur chaque changement.
-Reste les vérifications en session fraîche listées dans "En cours".
+Socle V1.4 **stable** — sécurité durcie (V1.3) puis outillé pour la suite (V1.4), et
+vérifié en session fraîche le 2026-07-06 : hook de garde (127/127 + tests live Bash et
+PowerShell), `permissions.deny` (lecture d'un `id_rsa` de test refusée dans le projet),
+`disableBypassPermissionsMode` (bypass neutralisé), session ID injecté au démarrage.
 
 ## Fait
 
@@ -37,16 +37,10 @@ Reste les vérifications en session fraîche listées dans "En cours".
 
 ## En cours / bloqué
 
-À vérifier à la prochaine session fraîche (rien d'autre de bloquant) :
-- `permissions.deny` étendu (ex: lecture d'un `id_rsa` de test → doit être refusée).
-- `disableBypassPermissionsMode` (démarrage en `--dangerously-skip-permissions` → doit
-  être refusé).
-- L'en-tête "Session Claude Code courante : <id réel>" apparaît bien en début de
-  session.
+Rien de bloquant.
 
 ## Prochaines étapes
 
-- Vérifications session fraîche ci-dessus, puis V1.4 considérée stable.
 - Futur skill "checkpoint" (retour arrière inter-sessions) : à construire comme
   surcouche fine de git — cadrage déjà écrit dans `EVOLUTION.md`, passer par
   `skill-builder`.
@@ -61,11 +55,18 @@ Reste les vérifications en session fraîche listées dans "En cours".
   `curl | sh`, `git clean -f` — l'utilisateur les lance lui-même si besoin.
 - `.env.example` non lisible par l'outil Read (pattern `.env.*`) ; nommer un template
   `env.example` si Claude doit pouvoir le lire.
+- Les patterns `**/` de `permissions.deny` sont relatifs au projet : un fichier secret
+  **hors projet** (ex: dans un dossier temp) reste lisible, sauf les chemins home
+  couverts par les règles `~/` explicites. Limite constatée au test du 2026-07-06.
+- `disableBypassPermissionsMode` ne refuse pas le démarrage en
+  `--dangerously-skip-permissions` (mode `-p` testé) : il neutralise silencieusement le
+  flag et la session tourne en mode permissions normal. La protection tient, mais sans
+  message d'erreur explicite.
 - Un hook ne peut pas rédiger un résumé riche, ni intercepter une coupure brutale de
   crédit, ni déclencher `/clear`/`/compact`.
 
 ## Dernier checkpoint
 
-2026-07-06 — V1.4 : sandbox-pretest, EVOLUTION.md, git init + .gitignore, session ID
-injecté au démarrage, batterie de tests versionnée (127/127). Détail : entrées V1.3 et
-V1.4 du même jour dans `.claude/session-log.md`.
+2026-07-06 — Vérifications session fraîche V1.4 toutes passées (hook live, deny,
+bypass, session ID) ; deux limites documentées (deny relatif au projet, bypass
+neutralisé sans erreur). V1.4 déclarée stable. Détail dans `.claude/session-log.md`.
