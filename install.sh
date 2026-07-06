@@ -27,8 +27,10 @@ if [ -n "${HARNAIS_SOURCE_DIR:-}" ]; then
   SRC="$HARNAIS_SOURCE_DIR"
   SHA="local"
 else
-  # codeload : archive directe, pas d'API GitHub donc pas de rate-limit.
-  URL="https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH"
+  # Endpoint API tarball : le dossier extrait s'appelle <owner>-<repo>-<sha court>,
+  # ce qui donne le sha sans requête supplémentaire (l'archive branche de codeload
+  # s'extrait en <repo>-<branche>, sans sha). Limite non authentifiée : 60/h — large.
+  URL="https://api.github.com/repos/$REPO/tarball/$BRANCH"
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL "$URL" -o "$TMP/harnais.tar.gz"
   else

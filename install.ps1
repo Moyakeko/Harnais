@@ -26,10 +26,12 @@ try {
     $sha = 'local'
   }
   else {
-    # codeload : archive directe, pas d'API GitHub donc pas de rate-limit.
+    # Endpoint API zipball : le dossier extrait s'appelle <owner>-<repo>-<sha court>,
+    # ce qui donne le sha sans requête supplémentaire (l'archive branche de codeload
+    # s'extrait en <repo>-<branche>, sans sha). Limite non authentifiée : 60/h — large.
     # Zipball + Expand-Archive : disponibles partout, pas de dépendance à tar.exe.
     $zip = Join-Path $tmp 'harnais.zip'
-    Invoke-WebRequest -UseBasicParsing 'https://codeload.github.com/Moyakeko/Harnais/zip/refs/heads/main' -OutFile $zip
+    Invoke-WebRequest -UseBasicParsing 'https://api.github.com/repos/Moyakeko/Harnais/zipball/main' -OutFile $zip
     Expand-Archive -Path $zip -DestinationPath $tmp
     $srcDir = Get-ChildItem -Path $tmp -Directory -Filter '*-Harnais-*' | Select-Object -First 1
     if (-not $srcDir) { throw "Archive inattendue (dossier extrait introuvable)." }
