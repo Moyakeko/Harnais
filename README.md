@@ -56,6 +56,11 @@ L'installation est **idempotente** : relancer le one-liner met à jour le socle
 La version installée est dans `.claude/harnais.version`. Les `.harnais-bak` gardent
 l'état d'origine d'avant la première installation.
 
+Sur un **projet déjà entamé**, l'installeur le détecte et te rappelle de lancer
+`security-audit` dans Claude Code : le `.gitignore` posé par le socle n'agit que pour
+l'avenir — un secret commité avant l'installation est toujours dans l'historique git,
+et aucun installeur ne peut l'en retirer.
+
 Puis :
 
 1. **Ouvrir Claude Code** dans le dossier et dire « onboard ce projet » : la skill

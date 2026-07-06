@@ -254,6 +254,11 @@ if (!fs.existsSync(targetDir)) fail(`cible introuvable : ${targetDir}`);
 if (path.resolve(sourceDir) === path.resolve(targetDir))
   fail("source et cible identiques — lance l'installation depuis le dossier du projet, pas depuis le socle.");
 
+// Mesuré AVANT toute écriture : un projet non vide a pu commiter des secrets
+// avant que le socle (et son .gitignore) n'existe — l'installeur ne peut pas
+// auditer ça lui-même, mais il doit le dire.
+const preexistingProject = fs.readdirSync(targetDir).some((n) => n !== ".git");
+
 // a) Socle-owned : hooks (tests inclus), skills, agents, EVOLUTION.md.
 for (const dir of [".claude/hooks", ".claude/skills", ".claude/agents"]) {
   const abs = path.join(sourceDir, dir);
@@ -303,5 +308,10 @@ process.stdout.write(summary.join("\n") + "\n\n");
 process.stdout.write(
   "Prochaines étapes :\n" +
     '  1. Ouvre Claude Code dans ce dossier et dis "onboard ce projet".\n' +
-    "  2. Smoke test du socle : node .claude/hooks/tests/test-guard.js\n"
+    "  2. Smoke test du socle : node .claude/hooks/tests/test-guard.js\n" +
+    (preexistingProject
+      ? '  3. Projet existant détecté : lance "security-audit" dans Claude Code —\n' +
+        "     le .gitignore posé par le socle n'agit que pour l'avenir. Si des secrets\n" +
+        "     ont pu être commités avant l'installation, vérifie aussi l'historique git.\n"
+      : "")
 );
