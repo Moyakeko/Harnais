@@ -47,6 +47,9 @@ jamais VPS ou PaaS par défaut.
       (lecture/écriture sur ses tables, pas de DROP/CREATE, pas de superuser) et est
       distinct du compte admin qui gère les migrations. Un bug ou une injection dans
       l'app ne doit pas pouvoir détruire la base.
+- [ ] Rappels d'actions que seul l'utilisateur peut faire (Claude ne peut ni les
+      vérifier ni les exécuter — les rappeler, puis le croire sur parole) : 2FA activée
+      sur le compte GitHub/GitLab et sur le compte de la plateforme de déploiement.
 
 ## 3. Checklist — après déploiement
 
