@@ -39,6 +39,14 @@ jamais VPS ou PaaS par défaut.
       besoin d'une stack d'observabilité complète pour un usage solo).
 - [ ] Si le service est exposé publiquement : HTTPS actif, pas de port de debug/admin
       exposé sans authentification.
+- [ ] Si le projet a un remote git (GitHub/GitLab) : protection de la branche principale
+      activée côté serveur (interdire force-push et suppression de branche). Le hook du
+      socle ne protège que cette machine — un service réel mérite l'équivalent serveur.
+      Proposer, ne pas l'activer sans accord (c'est le compte de l'utilisateur).
+- [ ] Si base de données : le compte utilisé par l'application a les privilèges minimum
+      (lecture/écriture sur ses tables, pas de DROP/CREATE, pas de superuser) et est
+      distinct du compte admin qui gère les migrations. Un bug ou une injection dans
+      l'app ne doit pas pouvoir détruire la base.
 
 ## 3. Checklist — après déploiement
 
