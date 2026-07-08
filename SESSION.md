@@ -9,12 +9,13 @@
 
 ## Niveau / statut actuel
 
-Socle V1.6 — **installable en une ligne sur n'importe quel projet** (dépôt public
+Socle V1.7 — **installable en une ligne sur n'importe quel projet** (dépôt public
 `github.com/Moyakeko/Harnais`, bootstraps `install.ps1`/`install.sh` + moteur de
 fusion additive `install/apply.js`), coexistence avec d'autres méthodes (BMAD/GSD)
-par fusion à marqueurs. Nouveau en V1.6 : notifications desktop Windows (vrais
-toasts « Claude Code ») sur fin de tâche et attente d'action, vérifiées
-visuellement sur la machine cible.
+par fusion à marqueurs. V1.6 : notifications desktop Windows (vrais toasts
+« Claude Code »). V1.7 : watchdogs crédits & contexte — coupure crédits couverte
+de bout en bout (checkpoint brut + reprise planifiée validée par l'humain),
+checkpoint forcé à 85 % de contexte. Chaîne vérifiée live sur la machine cible.
 
 ## Fait
 
@@ -42,7 +43,19 @@ visuellement sur la machine cible.
   cause racine des échecs : process tué/mort avant livraison du toast, PAS la
   parenté de process ; un powershell détaché+caché est tué en ~1s,
   vraisemblablement Kaspersky). Fallback `msg.exe` si le toast échoue. Config
-  optionnelle `.claude/notify-config.json`, batterie 32/32.
+  optionnelle `.claude/notify-config.json`, batterie 32/32. Logique toast
+  factorisée dans `lib/toast.js` en V1.7.
+- V1.7 : chaîne watchdog — `statusline.js` (capteur : seul canal local exposant
+  ctx % et `five_hour.resets_at`, vérifié dans le binaire v2.1.204 ; snapshot
+  atomique + affichage) ; `context-watchdog.js` (UserPromptSubmit/PostCompact :
+  ordre de `session-checkpoint` injecté une fois à ≥85 % de contexte, ré-armé
+  après compact, avertissement à ≥90 % des crédits 5h — substitut assumé au
+  /clear auto, indéclenchable par hook) ; `credit-watchdog.js` (StopFailure
+  matcher `billing_error|rate_limit` : checkpoint brut dans session-log +
+  tâche planifiée `HarnaisResume_*` à reset+1 min) ; `resume-after-reset.js`
+  (toast + terminal interactif prêt sur `claude --resume`, auto-suppression de
+  la tâche). Batterie 54/54 ; chaîne coupure→toast→tâche→toast+terminal
+  vérifiée live (dont piège `cmd start` corrigé via Start-Process).
 - `README.md` (notice d'utilisation orientée humain) ; dépôt `github.com/Moyakeko/
   Harnais` **public** (audit de l'historique complet passé avant publication).
 - V1.5 : installeur one-liner (`install.ps1`/`install.sh` → `install/apply.js` :
@@ -78,12 +91,18 @@ Rien de bloquant.
   `--dangerously-skip-permissions` (mode `-p` testé) : il neutralise silencieusement le
   flag et la session tourne en mode permissions normal. La protection tient, mais sans
   message d'erreur explicite.
-- Un hook ne peut pas rédiger un résumé riche, ni intercepter une coupure brutale de
-  crédit, ni déclencher `/clear`/`/compact`.
+- Un hook ne peut pas rédiger un résumé riche ni déclencher `/clear`/`/compact`
+  (le checkpoint riche reste le rôle de la skill `session-checkpoint`, poussée par
+  le context-watchdog). La coupure crédits en cours de session est désormais
+  interceptée (StopFailure → credit-watchdog) — mais pas un CLI fermé/PC éteint
+  avant la coupure, ni les sessions headless `-p` (pas de statusline, donc pas de
+  snapshot pour les watchdogs).
+- La tâche planifiée de reprise suppose la machine allumée à l'heure de reset
+  (sinon rattrapage au réveil via StartWhenAvailable).
 
 ## Dernier checkpoint
 
-2026-07-08 — V1.6 : notifications desktop réglées — le hook `notify-desktop.js`
-passe de la fenêtre modale `msg.exe` aux vrais toasts Windows (AUMID dédié,
-PowerShell synchrone), vérifié visuellement, 2 commits poussés. Détail dans
+2026-07-09 — V1.7 : watchdogs crédits & contexte (capteur statusline,
+checkpoint forcé à 85 %, coupure crédits → sauvegarde + reprise planifiée
+semi-automatique), chaîne vérifiée live, 8 commits poussés. Détail dans
 `.claude/session-log.md`.
