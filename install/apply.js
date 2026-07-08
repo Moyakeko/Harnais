@@ -28,7 +28,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.7";
+const VERSION = "1.8";
 
 // Marqueurs d'idempotence. Le start porte la version (informatif) mais la
 // détection est tolérante à son changement — sinon une mise à jour ne
@@ -312,14 +312,32 @@ mergeMarkedBlock(
 
 mergeSettings(path.join(sourceDir, ".claude", "settings.json"), path.join(targetDir, ".claude", "settings.json"));
 
-// Version installée — base des futures mises à jour.
+// Version installée — base des futures mises à jour. Lue AVANT écrasement : sert à
+// distinguer une mise à jour (bannière "vX → vY") d'une première installation, et à
+// savoir si un rappel de redémarrage de session est pertinent (skill update-harnais).
 const versionPath = path.join(targetDir, ".claude", "harnais.version");
 const hadVersion = fs.existsSync(versionPath);
+let previousVersion = null;
+if (hadVersion) {
+  try {
+    previousVersion = JSON.parse(readText(versionPath)).version || null;
+  } catch (e) {
+    previousVersion = null; // fichier corrompu : traité comme une transition inconnue.
+  }
+}
 const versionInfo = { version: VERSION, installedAt: new Date().toISOString(), commit };
 fs.writeFileSync(versionPath, JSON.stringify(versionInfo) + "\n");
 report(hadVersion ? "mis à jour" : "écrit", ".claude/harnais.version");
 
-process.stdout.write(`Socle Harnais v${VERSION} (${commit}) — installation dans ${targetDir}\n`);
+let banner;
+if (!hadVersion) {
+  banner = `Socle Harnais v${VERSION} (${commit}) — installation dans ${targetDir}`;
+} else if (previousVersion === VERSION) {
+  banner = `Socle Harnais v${VERSION} (${commit}) — déjà à jour dans ${targetDir} (fichiers revérifiés)`;
+} else {
+  banner = `Socle Harnais : mise à jour v${previousVersion || "?"} → v${VERSION} (${commit}) dans ${targetDir}`;
+}
+process.stdout.write(`${banner}\n`);
 process.stdout.write(summary.join("\n") + "\n\n");
 process.stdout.write(
   "Prochaines étapes :\n" +
@@ -329,5 +347,9 @@ process.stdout.write(
       ? '  3. Projet existant détecté : lance "security-audit" dans Claude Code —\n' +
         "     le .gitignore posé par le socle n'agit que pour l'avenir. Si des secrets\n" +
         "     ont pu être commités avant l'installation, vérifie aussi l'historique git.\n"
+      : "") +
+    (hadVersion
+      ? "  4. Si une session Claude Code tourne déjà sur ce projet, redémarre-la —\n" +
+        "     hooks et settings.json ne se rechargent qu'au démarrage d'une session.\n"
       : "")
 );
