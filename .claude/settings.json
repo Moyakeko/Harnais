@@ -39,6 +39,35 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/notify-desktop.js\" UserPromptSubmit"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/context-watchdog.js\" UserPromptSubmit"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/context-watchdog.js\" PostCompact"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "billing_error|rate_limit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/credit-watchdog.js\""
+          }
+        ]
       }
     ],
     "Stop": [
@@ -61,6 +90,10 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/statusline.js\""
   },
   "permissions": {
     "disableBypassPermissionsMode": "disable",
