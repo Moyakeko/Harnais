@@ -9,13 +9,14 @@
 
 ## Niveau / statut actuel
 
-Socle V1.7 — **installable en une ligne sur n'importe quel projet** (dépôt public
+Socle V1.8 — **installable en une ligne sur n'importe quel projet** (dépôt public
 `github.com/Moyakeko/Harnais`, bootstraps `install.ps1`/`install.sh` + moteur de
 fusion additive `install/apply.js`), coexistence avec d'autres méthodes (BMAD/GSD)
 par fusion à marqueurs. V1.6 : notifications desktop Windows (vrais toasts
 « Claude Code »). V1.7 : watchdogs crédits & contexte — coupure crédits couverte
-de bout en bout (checkpoint brut + reprise planifiée validée par l'humain),
-checkpoint forcé à 85 % de contexte. Chaîne vérifiée live sur la machine cible.
+de bout en bout (checkpoint brut + reprise planifiée semi-automatique), checkpoint
+forcé à 85 % de contexte. V1.8 : mise à jour du socle depuis le chat Claude Code
+(skill `update-harnais`), vérifiée en E2E réel contre le commit tout juste poussé.
 
 ## Fait
 
@@ -58,6 +59,14 @@ checkpoint forcé à 85 % de contexte. Chaîne vérifiée live sur la machine ci
   vérifiée live (dont piège `cmd start` corrigé via Start-Process).
 - `README.md` (notice d'utilisation orientée humain) ; dépôt `github.com/Moyakeko/
   Harnais` **public** (audit de l'historique complet passé avant publication).
+- V1.8 : skill `update-harnais` (8e skill) — invocable depuis le chat (« mets à jour
+  le harnais »), télécharge `install.ps1`/`install.sh` en fichier puis l'exécute
+  directement (jamais pipé, exception déjà sanctionnée par CLAUDE.md règle n°2),
+  zéro nouvelle logique d'installation. `apply.js` enrichi (VERSION 1.8) : bannière
+  consciente de la transition (`mise à jour vX → vY` / `déjà à jour`) + rappel de
+  redémarrage de session quand c'est pertinent. Vérifié en E2E réel : téléchargement
+  + extraction du commit `abcbfbe` tout juste poussé, `apply.js` exécuté contre un
+  projet simulé en v1.5 → bannière et fichiers corrects.
 - V1.5 : installeur one-liner (`install.ps1`/`install.sh` → `install/apply.js` :
   fusion additive à marqueurs `harnais:`, deny par union, anti-bypass forcé,
   `.harnais-bak`, idempotent, `.claude/harnais.version`) ; `templates/SESSION.md`
@@ -102,7 +111,7 @@ Rien de bloquant.
 
 ## Dernier checkpoint
 
-2026-07-09 — V1.7 : watchdogs crédits & contexte (capteur statusline,
-checkpoint forcé à 85 %, coupure crédits → sauvegarde + reprise planifiée
-semi-automatique), chaîne vérifiée live, 8 commits poussés. Détail dans
-`.claude/session-log.md`.
+2026-07-09 — V1.8 : skill `update-harnais` (mise à jour du socle depuis le chat,
+zéro duplication avec install.ps1/sh), `apply.js` conscient des transitions de
+version, vérifié en E2E réel depuis GitHub contre le commit tout juste poussé,
+2 commits poussés. Détail dans `.claude/session-log.md`.
