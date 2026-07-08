@@ -150,3 +150,43 @@ architecture/cybersécurité de base, les méthodes de construction viennent par
 lieu de s'ajouter à un projet existant) ; git submodule/subtree (couple le projet au
 repo du socle, exactement ce que l'utilisateur voulait éviter) ; un installeur tout
 PowerShell ou tout bash (double implémentation de la fusion, divergence garantie).
+
+### V1.6/V1.7 — notifications toast, watchdogs crédits & contexte (2026-07-08)
+
+**Origine** : demande directe de l'utilisateur — être prévenu par une vraie
+notification Windows (pas une modale) des fins de tâche et attentes d'action (V1.6),
+puis : sauvegarde automatique de l'état quand les crédits s'épuisent en pleine tâche +
+reprise proposée à l'heure de réinitialisation, et checkpoint forcé à ~85 % de
+contexte avant que l'auto-compact ne perde le détail (V1.7).
+
+**Retenu** :
+- **Toast WinRT sous AUMID dédié `ClaudeCode.Harnais`** (enregistré paresseusement en
+  HKCU, sans admin), PowerShell en **enfant synchrone maintenu vivant 1,5 s** — les
+  échecs historiques venaient de là : un toast émis par un process mort aussitôt après
+  `Show()` est perdu, et un powershell détaché+caché est tué en ~1 s sur la machine
+  cible (vraisemblablement Kaspersky). `msg.exe` rétrogradé en filet de secours.
+  Logique partagée dans `lib/toast.js`.
+- **La statusline comme capteur** (`statusline.js` → `statusline-snapshot.json`) :
+  vérifié dans le binaire v2.1.204, c'est le SEUL canal local qui expose
+  `context_window.used_percentage` et `rate_limits.five_hour.{used_percentage,
+  resets_at}` — aucun hook ne reçoit ces données.
+- **`StopFailure` (matcher `billing_error|rate_limit`)** comme déclencheur de la
+  coupure crédits — événement vérifié dans le binaire (« fires instead of Stop when an
+  API error ended the turn »). `credit-watchdog.js` : checkpoint brut dans
+  session-log.md + tâche planifiée (`Register-ScheduledTask -StartWhenAvailable`,
+  seul moyen de rattraper un PC en veille) à reset+1 min → `resume-after-reset.js` :
+  toast + terminal interactif prêt sur `claude --resume`, auto-suppression.
+- **Reprise semi-automatique, pas headless** (choix utilisateur explicite) : un
+  `claude -p --resume` autonome consommerait des crédits sans supervision et peut
+  bloquer sur une permission ; le terminal ouvert laisse l'humain valider.
+- **Checkpoint forcé à 85 % au lieu d'un `/clear` auto** : `/clear`/`/compact` ne sont
+  déclenchables par aucun hook ni SDK (vérifié) ; `context-watchdog.js` injecte une
+  fois par session (ré-armé par PostCompact) l'ordre d'exécuter `session-checkpoint`,
+  puis l'auto-compact intégré assure la continuité, avec `precompact-safety-net.js`
+  en filet brut inchangé.
+
+**Écarté** : SnoreToast/node-notifier (binaire tiers ou dépendance npm — le socle
+reste zéro dépendance) ; le hook `Notification` pour détecter la limite de crédits
+(il ne reçoit pas ce type de message) ; `schtasks.exe` pour planifier (n'expose pas
+StartWhenAvailable) ; un seuil d'auto-compact configurable (n'existe pas dans Claude
+Code) ; la relance automatique headless (risque crédits/permissions, voir ci-dessus).

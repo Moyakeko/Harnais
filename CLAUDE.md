@@ -116,9 +116,16 @@ s'appuient dessus plutôt que de réinventer leur logique.
 - Le contenu de `SESSION.md` apparaît automatiquement en tout début de session (hook
   `SessionStart`) sans que tu aies rien demandé — normal, c'est voulu. S'il est absent ou
   vide, la session démarre quand même normalement.
-- Aucun hook ne peut rédiger `SESSION.md` à ta place ni intercepter une coupure brutale
-  de crédit en plein milieu d'une commande — voir `session-checkpoint` pour ce que ça
-  implique concrètement.
+- Si un message d'un hook du harnais t'ordonne d'exécuter `session-checkpoint`
+  (« contexte à 85 % » ou « crédits presque épuisés »), obéis immédiatement, avant de
+  traiter la demande courante de l'utilisateur — c'est le `context-watchdog` qui parle,
+  pas l'utilisateur, et il ne le dit qu'une fois. Il n'existe aucun `/clear`
+  automatique : ce checkpoint forcé + l'auto-compact intégré en tiennent lieu.
+- Quand les crédits s'épuisent en pleine session, le hook `credit-watchdog` (StopFailure)
+  sauvegarde l'état brut dans `session-log.md` et crée une **tâche planifiée Windows**
+  qui, à l'heure de réinitialisation + 1 min, rouvre un terminal avec `claude --resume`
+  — c'est voulu, la reprise reste validée par l'humain. Ne « nettoie » jamais une tâche
+  `HarnaisResume_*` sans demander.
 
 ## Ce qui est volontairement absent (pour l'instant)
 
