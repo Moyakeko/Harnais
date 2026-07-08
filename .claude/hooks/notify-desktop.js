@@ -7,27 +7,11 @@
  *
  * Inspiré de CCNotify (github.com/dazuiba/CCNotify, macOS-only, Python +
  * terminal-notifier + SQLite) recréé en Node pur pour Windows :
- *   - Notification via un vrai toast WinRT (ToastNotificationManager) sous
- *     une identité "Claude Code" dédiée : AUMID `ClaudeCode.Harnais`
- *     enregistré paresseusement dans HKCU\Software\Classes\AppUserModelId au
- *     premier toast (clé utilisateur, sans admin, réversible — méthode
- *     documentée pour les apps de bureau non packagées). Deux premières
- *     tentatives avaient échoué et le diagnostic initial (parenté de process)
- *     était faux ; la vraie cause, isolée par tests croisés sur la machine
- *     cible (2026-07-08) :
- *       1. Un toast émis par un process qui meurt aussitôt après Show() peut
- *          être perdu avant livraison — il faut que le process survive ~1s.
- *       2. Un powershell.exe détaché ET caché (-WindowStyle Hidden, orphelin)
- *          est tué au bout d'~1s sur la machine cible (vraisemblablement
- *          Kaspersky, heuristique classique anti-malware).
- *     La formule qui marche : PowerShell en enfant SYNCHRONE (spawnSync, pas
- *     détaché, pas de -WindowStyle Hidden — la console est supprimée côté
- *     Node par windowsHide/CREATE_NO_WINDOW), maintenu vivant 1,5s après
- *     Show(). Coût : le hook bloque ~2s sur Stop/Notification — invisible en
- *     pratique (le tour est déjà terminé quand Stop se déclenche).
- *   - `msg.exe` (fenêtre modale Terminal Services, moche mais fiable en
- *     toutes circonstances sur la machine testée) reste en filet de secours
- *     si le toast échoue (WinRT indisponible, PowerShell absent, timeout).
+ *   - L'affichage lui-même (toast WinRT "Claude Code", fallback msg.exe, et
+ *     le pourquoi de chaque précaution durement acquise) vit dans
+ *     lib/toast.js, partagé avec les watchdogs V1.7. Coût : le hook bloque
+ *     ~2s sur Stop/Notification — invisible en pratique (le tour est déjà
+ *     terminé quand Stop se déclenche).
  *   - État minimal en JSON (.claude/notify-state.json) au lieu d'une base
  *     SQLite : chaque invocation de hook est un nouveau process qui ne
  *     partage rien avec le précédent, il faut bien persister {startedAt, seq}
@@ -52,37 +36,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { spawn, spawnSync } = require("child_process");
-
-const MSG_TIMEOUT_SECONDS = 10;
-
-const TOAST_AUMID = "ClaudeCode.Harnais";
-
-// Marge large : chargement WinRT (~0,5s) + Start-Sleep 1,5s. Au-delà, on
-// considère le toast perdu et on bascule sur le fallback msg.exe.
-const TOAST_TIMEOUT_MS = 8000;
-
-// Script PowerShell constant — titre et corps arrivent par variables
-// d'environnement ($env:NOTIFY_TITLE / $env:NOTIFY_BODY), jamais interpolés
-// dans le code : aucune injection possible, même logique que le tableau
-// d'arguments de msg.exe. L'échappement XML (SecurityElement::Escape) protège
-// le LoadXml. Le Start-Sleep final n'est pas décoratif : sans lui, le toast
-// peut mourir avec le process avant d'être livré (cause racine des échecs
-// initiaux, voir l'en-tête).
-const TOAST_PS = [
-  "$ErrorActionPreference = 'Stop'",
-  `$key = 'HKCU:\\Software\\Classes\\AppUserModelId\\${TOAST_AUMID}'`,
-  "if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null; Set-ItemProperty -Path $key -Name DisplayName -Value 'Claude Code'; Set-ItemProperty -Path $key -Name ShowInSettings -Value 1 -Type DWord }",
-  "$null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]",
-  "$null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime]",
-  "$title = [System.Security.SecurityElement]::Escape($env:NOTIFY_TITLE)",
-  "$body = [System.Security.SecurityElement]::Escape($env:NOTIFY_BODY)",
-  "$doc = New-Object Windows.Data.Xml.Dom.XmlDocument",
-  '$doc.LoadXml("<toast><visual><binding template=""ToastGeneric""><text>$title</text><text>$body</text></binding></visual></toast>")',
-  `[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('${TOAST_AUMID}').Show((New-Object Windows.UI.Notifications.ToastNotification($doc)))`,
-  "Start-Sleep -Milliseconds 1500",
-  "Write-Output 'toast-shown-ok'",
-].join("; ");
+const { showToast } = require("./lib/toast");
 
 const STATE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -152,57 +106,6 @@ function formatDuration(ms) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return minutes ? `${hours}h${minutes}m` : `${hours}h`;
-}
-
-// Toast WinRT sous identité "Claude Code" (voir TOAST_PS et l'en-tête pour
-// le pourquoi de chaque précaution). Synchrone à dessein : le process
-// PowerShell doit rester un enfant vivant jusqu'à la livraison du toast —
-// détaché il se fait tuer, mort trop tôt le toast est perdu.
-function showToast(title, subtitle) {
-  // Échappatoire de test : évite qu'une suite automatisée fasse apparaître un
-  // vrai message à chaque exécution (voir tests/test-notify.js).
-  if (process.env.NOTIFY_DESKTOP_DRY_RUN === "1") return;
-  try {
-    const res = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", TOAST_PS], {
-      env: { ...process.env, NOTIFY_TITLE: title, NOTIFY_BODY: subtitle || "" },
-      encoding: "utf8",
-      // Pas de fenêtre console côté Node (CREATE_NO_WINDOW) : n'utilise PAS
-      // -WindowStyle Hidden, marqueur qui déclenche la terminaison par l'AV.
-      windowsHide: true,
-      timeout: TOAST_TIMEOUT_MS,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    // Le marqueur prouve que Show() a été atteint ET que le sleep de
-    // livraison s'est écoulé — un simple exit 0 ne suffirait pas.
-    if (res.status === 0 && (res.stdout || "").includes("toast-shown-ok")) return;
-  } catch (e) {
-    // PowerShell introuvable ou spawn impossible : on tente le fallback.
-  }
-  showModalFallback(title, subtitle);
-}
-
-// Filet de secours si le toast échoue : msg.exe (utilitaire Windows natif de
-// Terminal Services), fenêtre modale avec bouton OK — moche mais fiable.
-// Le message arrive comme argument séparé (tableau passé à spawn, pas une
-// chaîne shell) : aucune interpolation, donc aucun risque d'injection.
-// S'auto-ferme après MSG_TIMEOUT_SECONDS si ignoré.
-function showModalFallback(title, subtitle) {
-  try {
-    const message = subtitle ? `${title} — ${subtitle}` : title;
-    // "*" (toutes les sessions), pas le nom d'utilisateur ciblé : testé en
-    // conditions réelles, cibler le username échoue silencieusement en mode
-    // détaché sur la machine de référence (résolution de session
-    // incohérente une fois le process orphelin) — "*" fonctionne de façon
-    // fiable. Sans risque pratique sur une machine perso mono-utilisateur.
-    const child = spawn("msg.exe", ["*", `/TIME:${MSG_TIMEOUT_SECONDS}`, message], {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.on("error", () => {}); // msg.exe absent/désactivé : best-effort, on ne bloque rien.
-    child.unref();
-  } catch (e) {
-    // Best-effort : tant pis, on ne bloque rien.
-  }
 }
 
 // Classification du message d'un événement Notification — premier match
