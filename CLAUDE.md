@@ -71,6 +71,7 @@ permission actif.
 | `deploy-checklist` | Avant de déployer ou mettre à jour un service réel. |
 | `skill-builder` | Pour créer une nouvelle skill du socle, ou dériver une version plus légère (ex: un socle "études uniquement"). |
 | `session-checkpoint` | Après une étape significative, avant une pause connue, ou sur "fais le point" — met à jour `SESSION.md`. |
+| `update-harnais` | Sur "mets à jour le harnais" — récupère la dernière version du socle sur un projet qui l'a déjà (additif, ne touche jamais `SESSION.md`). |
 
 Skills globales déjà disponibles dans le harnais Claude Code (ne pas dupliquer) :
 `/verify` (vérification end-to-end d'un changement), `/code-review` (revue du diff
@@ -127,13 +128,18 @@ s'appuient dessus plutôt que de réinventer leur logique.
   `claude --resume <session>` — c'est l'utilisateur qui la lance lui-même (l'ouverture
   automatique d'un terminal a été testée puis retirée sur sa demande). Ne « nettoie »
   jamais une tâche `HarnaisResume_*` sans demander.
+- La skill `update-harnais` télécharge `install.ps1`/`install.sh` dans un fichier puis
+  l'exécute directement (deux étapes séparées, jamais pipées) — ce n'est pas un
+  contournement du hook de garde, c'est précisément le mécanisme que ce même CLAUDE.md
+  prévoit pour ce cas (règle n°2) : le hook ne bloque qu'un pipe vers un interpréteur,
+  pas un téléchargement de fichier suivi d'une exécution directe.
 
 ## Ce qui est volontairement absent (pour l'instant)
 
 Pas de système de mémoire/apprentissage continu façon ECC, pas de couche sécurité
-multi-agents, pas de règles par langage séparées. Le socle reste à 7 skills + 2 agents +
-3 hooks par choix délibéré — à faire évoluer via `skill-builder` si le besoin s'en fait
-sentir, pas par défaut. Pour toute évolution du socle lui-même (scripts
+multi-agents, pas de règles par langage séparées. Le socle reste à 8 skills + 2 agents +
+6 hooks (+ 1 statusline) par choix délibéré — à faire évoluer via `skill-builder` si le
+besoin s'en fait sentir, pas par défaut. Pour toute évolution du socle lui-même (scripts
 d'auto-amélioration, adaptation à un autre modèle, durcissement entreprise, futur
 mécanisme de checkpoint/rollback) : lis `EVOLUTION.md` d'abord — il fixe les invariants
 qu'aucune évolution ne doit affaiblir.

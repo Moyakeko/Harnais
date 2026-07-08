@@ -193,3 +193,33 @@ reste zéro dépendance) ; le hook `Notification` pour détecter la limite de cr
 (il ne reçoit pas ce type de message) ; `schtasks.exe` pour planifier (n'expose pas
 StartWhenAvailable) ; un seuil d'auto-compact configurable (n'existe pas dans Claude
 Code) ; la relance automatique headless (risque crédits/permissions, voir ci-dessus).
+
+### V1.8 — skill update-harnais (2026-07-09)
+
+**Origine** : demande directe de l'utilisateur — il oublie de relancer le one-liner
+d'installation sur ses autres projets quand une nouvelle version du socle sort (ex :
+les watchdogs V1.6/V1.7), et voudrait une commande de mise à jour plus accessible.
+
+**Retenu** :
+- **Une skill invocable depuis le chat** (« mets à jour le harnais »), choix explicite
+  de l'utilisateur face à l'alternative d'un simple alias de terminal — plus pratique
+  quand on est déjà dans une session Claude Code sur le projet à mettre à jour.
+- **Zéro nouvelle logique d'installation** : la skill télécharge `install.ps1`/
+  `install.sh` dans un fichier (`-OutFile`/`-o`, jamais pipé) puis l'exécute
+  directement (jamais pipé non plus) — exactement le mécanisme que CLAUDE.md prévoit
+  déjà comme exception légitime au blocage `curl|sh` (règle n°2, section
+  « contre-intuitif ») : télécharger puis exécuter en deux étapes séparées. Le script
+  fait ensuite le travail habituel via `apply.js`, inchangé.
+- **`apply.js` enrichi, pas dupliqué** : lecture de la version précédente avant
+  écrasement de `.claude/harnais.version`, bannière consciente de la transition
+  (« mise à jour vX → vY » / « déjà à jour »), et rappel de redémarrage de session
+  uniquement affiché quand c'est pertinent (mise à jour, pas première installation).
+- **Redémarrage de session laissé manuel** : aucun mécanisme ne permet à une skill de
+  recharger les hooks/`settings.json` d'une session déjà démarrée — la skill le dit
+  explicitement à chaque fois plutôt que de laisser croire à une mise à jour à chaud.
+
+**Écarté** : un `update.ps1`/`update.sh` séparé au niveau du dépôt (duplication de
+logique avec `install.ps1`/`install.sh` pour un gain purement cosmétique de nommage) ;
+une confirmation bloquante supplémentaire avant le téléchargement (invoquer la skill
+explicitement est déjà la confirmation) ; toute tentative de recharger les hooks à
+chaud (n'existe pas côté Claude Code).

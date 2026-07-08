@@ -5,8 +5,8 @@ d'école, projet perso, service déployé pour soi ou ses proches) avec des gard
 sécurité et une méthode de travail déjà en place. Ce dépôt n'est **pas** un projet
 applicatif : c'est le moule que l'on copie au départ de chaque nouveau projet.
 
-Version courante : **V1.5** — installable en une ligne (voir ci-dessous) ; V1.4
-vérifiée en session fraîche le 2026-07-06.
+Version courante : **V1.8** — installable en une ligne (voir ci-dessous) et mettable à
+jour depuis le chat Claude Code lui-même (skill `update-harnais`, voir plus bas).
 
 ## À qui s'adressent les fichiers
 
@@ -70,26 +70,47 @@ Puis :
 2. Smoke test : `node .claude/hooks/tests/test-guard.js` (doit afficher `138/138`).
 3. Travailler normalement — le socle fait le reste (voir la notice ci-dessous).
 
+## Mettre à jour un projet existant
+
+Deux façons d'obtenir la dernière version sur un projet qui a **déjà** le socle —
+les deux sont additives et idempotentes (aucune n'écrase `SESSION.md` ni le travail
+en cours) :
+
+- **Depuis le chat Claude Code (recommandé)** : ouvre une session sur le projet et dis
+  « mets à jour le harnais » — la skill `update-harnais` télécharge et applique la
+  dernière version elle-même, puis te rappelle de redémarrer la session (les hooks et
+  `settings.json` ne se rechargent qu'au démarrage).
+- **Depuis un terminal**, si aucune session n'est ouverte : relance exactement le même
+  one-liner que pour l'installation initiale (voir plus haut) — il détecte que le
+  socle est déjà là et met à jour au lieu d'installer.
+
 ## Ce que contient le socle
 
 - **6 règles non négociables** (`CLAUDE.md`) : pas de secret en clair, pas de commande
   destructrice sans confirmation, pas de « c'est fait » sans vérification réelle,
   pédagogie du pourquoi, principes Karpathy (réflexion avant exécution), `SESSION.md`
   maintenu à jour.
-- **3 hooks** (`.claude/hooks/`) :
+- **6 hooks** (`.claude/hooks/`) + une **statusline** :
   - `guard-dangerous-commands.js` — bloque par exit code, même en auto-approve,
     5 catégories : suppression récursive large, destruction de disque, git destructif,
     code téléchargé pipé dans un shell, fichiers secrets via le shell. Batterie de
     tests versionnée dans `.claude/hooks/tests/test-guard.js` (138 cas).
   - `session-start-inject.js` — injecte `SESSION.md` + l'ID de session au démarrage.
   - `precompact-safety-net.js` — filet de sécurité avant compactage du contexte.
+  - `notify-desktop.js` — vrais toasts Windows (fin de tâche, attente d'action).
+  - `statusline.js` — capteur du % de contexte et des crédits, alimente les deux
+    watchdogs ci-dessous.
+  - `context-watchdog.js` — checkpoint forcé à 85 % de contexte (pas de `/clear`
+    automatique possible : c'est le substitut).
+  - `credit-watchdog.js` — sauvegarde l'état à la coupure de crédits et prépare la
+    reprise à l'heure de réinitialisation.
 - **29 règles `permissions.deny`** (`.claude/settings.json`) : Claude ne peut pas lire
   les fichiers secrets (`.env*`, `*.pem`, clés SSH, états Terraform, `~/.ssh`,
   `~/.aws`…), et `disableBypassPermissionsMode` neutralise le mode
   `--dangerously-skip-permissions`.
-- **7 skills** : `onboard-project`, `dev-cycle`, `security-audit`, `sandbox-pretest`,
-  `deploy-checklist`, `skill-builder`, `session-checkpoint` — le routage détaillé est
-  dans `CLAUDE.md`.
+- **8 skills** : `onboard-project`, `dev-cycle`, `security-audit`, `sandbox-pretest`,
+  `deploy-checklist`, `skill-builder`, `session-checkpoint`, `update-harnais` — le
+  routage détaillé est dans `CLAUDE.md`.
 - **2 sous-agents** : `code-reviewer` (revue large sans polluer le contexte principal),
   `debugger` (root-cause d'un bug, idem).
 
@@ -140,5 +161,5 @@ existe encore). Le retour arrière sur le code passe par git (un commit par évo
 
 Toute modification du socle lui-même (nouvelle skill, durcissement, dérivation d'une
 variante plus légère) passe par la skill `skill-builder` et doit respecter les
-invariants de `EVOLUTION.md`. Le périmètre actuel (7 skills, 2 agents, 3 hooks) est un
+invariants de `EVOLUTION.md`. Le périmètre actuel (8 skills, 2 agents, 6 hooks) est un
 choix délibéré : on n'ajoute que si le besoin est démontré.
