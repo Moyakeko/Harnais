@@ -13,6 +13,10 @@ credentials*.json
 # potentiellement sensibles : reste sur cette machine, jamais sur un remote.
 .claude/session-log.md
 
+# État local du hook de notification desktop (timestamps/compteurs par session,
+# pas un secret mais pas plus utile sur un remote que session-log.md).
+.claude/notify-state.json
+
 # Config Claude Code propre à la machine (pas au socle)
 .claude/settings.local.json
 
