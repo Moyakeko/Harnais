@@ -28,7 +28,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.6";
+const VERSION = "1.7";
 
 // Marqueurs d'idempotence. Le start porte la version (informatif) mais la
 // détection est tolérante à son changement — sinon une mise à jour ne
@@ -56,7 +56,10 @@ credentials*.json
 # Config Claude Code propre à la machine
 .claude/settings.local.json
 # État local du hook de notification desktop (timestamps/compteurs par session)
-.claude/notify-state.json`;
+.claude/notify-state.json
+# État local des watchdogs (snapshot statusline + flags de seuils)
+.claude/statusline-snapshot.json
+.claude/watchdog-state.json`;
 
 // Bruit par stack — ajouté hors marqueurs, uniquement à la création d'un
 // .gitignore neuf (ensuite c'est au projet de le faire vivre).
@@ -213,6 +216,17 @@ function mergeSettings(srcPath, dstPath) {
       const cmds = (entry.hooks || []).map((h) => h.command);
       if (!cmds.every((c) => commands.has(c))) existing.hooks[event].push(entry);
     }
+  }
+
+  // Statusline : posée seulement si le projet n'en a pas déjà une — c'est le
+  // capteur des watchdogs, mais on n'écrase jamais un affichage choisi par le
+  // projet (fusion additive). Sans elle, les watchdogs restent silencieux
+  // (pas de snapshot) : dégradation douce, signalée à l'installation.
+  if (socle.statusLine && !existing.statusLine) {
+    existing.statusLine = socle.statusLine;
+  } else if (socle.statusLine && existing.statusLine) {
+    const same = JSON.stringify(existing.statusLine) === JSON.stringify(socle.statusLine);
+    if (!same) report("statusLine existante conservée — les watchdogs contexte/crédits resteront inactifs sans le capteur du socle", rel);
   }
 
   // Permissions : deny = union (jamais de retrait), anti-bypass forcé.
