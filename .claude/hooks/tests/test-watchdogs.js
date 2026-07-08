@@ -2,10 +2,10 @@
 // Batterie de tests pour la chaîne watchdog V1.7 : statusline.js (capteur),
 // context-watchdog.js (seuils contexte/crédits), credit-watchdog.js
 // (StopFailure → checkpoint + planification) et resume-after-reset.js.
-// WATCHDOG_DRY_RUN=1 court-circuite toast, Register-ScheduledTask et
-// ouverture de terminal — les hooks écrivent alors sur stdout ce qu'ils
-// AURAIENT fait, ce que la batterie vérifie. La vérification réelle
-// (tâche planifiée, terminal, toasts) se fait à la main, voir SESSION.md.
+// WATCHDOG_DRY_RUN=1 court-circuite toast et Register-ScheduledTask — les
+// hooks écrivent alors sur stdout ce qu'ils AURAIENT fait, ce que la
+// batterie vérifie. La vérification réelle (tâche planifiée, toasts) se
+// fait à la main, voir SESSION.md.
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
@@ -158,13 +158,13 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
   const homeEnv = { USERPROFILE: fakeHome, HOME: fakeHome };
 
   const resNoTranscript = run("resume-after-reset.js", ["sess-1234-abc", dir], "", homeEnv);
-  check("transcript absent => session neuve (pas de --resume)", JSON.parse(resNoTranscript.stdout).wouldOpen.claudeArgs.length === 0);
+  check("transcript absent => session neuve (pas de --resume)", JSON.parse(resNoTranscript.stdout).claudeArgs.length === 0);
 
   fs.mkdirSync(path.join(fakeHome, ".claude", "projects", flat), { recursive: true });
   fs.writeFileSync(path.join(fakeHome, ".claude", "projects", flat, "sess-1234-abc.jsonl"), "{}");
   const resTranscript = run("resume-after-reset.js", ["sess-1234-abc", dir], "", homeEnv);
   const out = JSON.parse(resTranscript.stdout);
-  check("transcript présent => claude --resume <session>", out.wouldOpen.claudeArgs.join(" ") === "--resume sess-1234-abc");
+  check("transcript présent => claude --resume <session>", out.claudeArgs.join(" ") === "--resume sess-1234-abc");
   check("la tâche à supprimer porte le nom dérivé", out.wouldDeleteTask === "HarnaisResume_sess-123");
   fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(fakeHome, { recursive: true, force: true });

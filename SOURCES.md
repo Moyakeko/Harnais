@@ -175,10 +175,13 @@ contexte avant que l'auto-compact ne perde le détail (V1.7).
   API error ended the turn »). `credit-watchdog.js` : checkpoint brut dans
   session-log.md + tâche planifiée (`Register-ScheduledTask -StartWhenAvailable`,
   seul moyen de rattraper un PC en veille) à reset+1 min → `resume-after-reset.js` :
-  toast + terminal interactif prêt sur `claude --resume`, auto-suppression.
+  toast, auto-suppression.
 - **Reprise semi-automatique, pas headless** (choix utilisateur explicite) : un
   `claude -p --resume` autonome consommerait des crédits sans supervision et peut
-  bloquer sur une permission ; le terminal ouvert laisse l'humain valider.
+  bloquer sur une permission ; le toast donne la commande `claude --resume <session>`,
+  c'est l'humain qui la lance. **Ouverture automatique d'un terminal testée puis
+  retirée** (2026-07-09, demande explicite) : l'utilisateur préfère lancer la reprise
+  lui-même plutôt qu'une fenêtre qui s'ouvre seule — le toast suffit à l'informer.
 - **Checkpoint forcé à 85 % au lieu d'un `/clear` auto** : `/clear`/`/compact` ne sont
   déclenchables par aucun hook ni SDK (vérifié) ; `context-watchdog.js` injecte une
   fois par session (ré-armé par PostCompact) l'ordre d'exécuter `session-checkpoint`,

@@ -123,9 +123,10 @@ s'appuient dessus plutôt que de réinventer leur logique.
   automatique : ce checkpoint forcé + l'auto-compact intégré en tiennent lieu.
 - Quand les crédits s'épuisent en pleine session, le hook `credit-watchdog` (StopFailure)
   sauvegarde l'état brut dans `session-log.md` et crée une **tâche planifiée Windows**
-  qui, à l'heure de réinitialisation + 1 min, rouvre un terminal avec `claude --resume`
-  — c'est voulu, la reprise reste validée par l'humain. Ne « nettoie » jamais une tâche
-  `HarnaisResume_*` sans demander.
+  qui, à l'heure de réinitialisation + 1 min, envoie un toast donnant la commande
+  `claude --resume <session>` — c'est l'utilisateur qui la lance lui-même (l'ouverture
+  automatique d'un terminal a été testée puis retirée sur sa demande). Ne « nettoie »
+  jamais une tâche `HarnaisResume_*` sans demander.
 
 ## Ce qui est volontairement absent (pour l'instant)
 
