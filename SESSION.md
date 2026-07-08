@@ -9,11 +9,12 @@
 
 ## Niveau / statut actuel
 
-Socle V1.5 — **installable en une ligne sur n'importe quel projet** (dépôt public
+Socle V1.6 — **installable en une ligne sur n'importe quel projet** (dépôt public
 `github.com/Moyakeko/Harnais`, bootstraps `install.ps1`/`install.sh` + moteur de
 fusion additive `install/apply.js`), coexistence avec d'autres méthodes (BMAD/GSD)
-par fusion à marqueurs. Faux positif `git add` du hook corrigé (V1.4 vérifiée en
-session fraîche le même jour : deny, anti-bypass, session ID — tout tient).
+par fusion à marqueurs. Nouveau en V1.6 : notifications desktop Windows (vrais
+toasts « Claude Code ») sur fin de tâche et attente d'action, vérifiées
+visuellement sur la machine cible.
 
 ## Fait
 
@@ -35,6 +36,13 @@ session fraîche le même jour : deny, anti-bypass, session ID — tout tient).
 - 2 sous-agents : `code-reviewer`, `debugger`.
 - Hooks `session-start-inject.js` (V1.4 : injecte aussi le session ID) et
   `precompact-safety-net.js`.
+- V1.6 : hook `notify-desktop.js` (UserPromptSubmit/Stop/Notification) — vrais
+  toasts Windows sous identité « Claude Code » (AUMID dédié auto-enregistré dans
+  HKCU au premier toast, PowerShell enfant synchrone maintenu vivant 1,5s —
+  cause racine des échecs : process tué/mort avant livraison du toast, PAS la
+  parenté de process ; un powershell détaché+caché est tué en ~1s,
+  vraisemblablement Kaspersky). Fallback `msg.exe` si le toast échoue. Config
+  optionnelle `.claude/notify-config.json`, batterie 32/32.
 - `README.md` (notice d'utilisation orientée humain) ; dépôt `github.com/Moyakeko/
   Harnais` **public** (audit de l'historique complet passé avant publication).
 - V1.5 : installeur one-liner (`install.ps1`/`install.sh` → `install/apply.js` :
@@ -75,6 +83,7 @@ Rien de bloquant.
 
 ## Dernier checkpoint
 
-2026-07-06 — V1.5 : socle installable en une ligne (dépôt public, bootstraps +
-apply.js, fusion additive, E2E validé depuis GitHub) + fix du faux positif git add
-(138/138). 7 commits, un par changement. Détail dans `.claude/session-log.md`.
+2026-07-08 — V1.6 : notifications desktop réglées — le hook `notify-desktop.js`
+passe de la fenêtre modale `msg.exe` aux vrais toasts Windows (AUMID dédié,
+PowerShell synchrone), vérifié visuellement, 2 commits poussés. Détail dans
+`.claude/session-log.md`.
