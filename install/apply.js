@@ -28,7 +28,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.5";
+const VERSION = "1.6";
 
 // Marqueurs d'idempotence. Le start porte la version (informatif) mais la
 // détection est tolérante à son changement — sinon une mise à jour ne
@@ -54,7 +54,9 @@ credentials*.json
 # Historique local Claude Code (extraits bruts de transcript, potentiellement sensibles)
 .claude/session-log.md
 # Config Claude Code propre à la machine
-.claude/settings.local.json`;
+.claude/settings.local.json
+# État local du hook de notification desktop (timestamps/compteurs par session)
+.claude/notify-state.json`;
 
 // Bruit par stack — ajouté hors marqueurs, uniquement à la création d'un
 // .gitignore neuf (ensuite c'est au projet de le faire vivre).
