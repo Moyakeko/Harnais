@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 /**
  * Hook StopFailure (matcher: billing_error|rate_limit) — le tour vient d'être
- * interrompu par l'épuisement des crédits. Trois actions, toutes best-effort :
+ * interrompu par l'épuisement des crédits (chemin RÉACTIF : la coupure est
+ * survenue sans avoir été anticipée). Trois actions, toutes best-effort :
  *
  *   1. Checkpoint brut horodaté dans .claude/session-log.md (même motif que
  *      precompact-safety-net.js) : erreur, dernier message assistant, queue du
  *      transcript. Un hook ne raisonne pas — le checkpoint riche reste le rôle
  *      de la skill session-checkpoint (poussée par context-watchdog quand les
- *      crédits passent 90%) ; ici on garantit juste qu'aucune trace ne se perd.
- *   2. Planifie une tâche Windows (Register-ScheduledTask, pas schtasks : seul
- *      le cmdlet expose -StartWhenAvailable, qui rattrape un PC en veille à
- *      l'heure dite) à l'heure de réinitialisation + 1 min, qui lancera
- *      resume-after-reset.js : toast + terminal prêt sur `claude --resume` —
- *      la reprise reste validée par l'humain (choix utilisateur : pas de
- *      relance headless qui consommerait des crédits sans supervision).
+ *      crédits passent 90%, ou forcée par hard-stop-guard.js à 95%) ; ici on
+ *      garantit juste qu'aucune trace ne se perd.
+ *   2. Planifie la reprise via lib/resume-scheduler.js (Register-ScheduledTask
+ *      à l'heure de réinitialisation + 1 min) — MÊME mécanisme que le chemin
+ *      PROACTIF de hard-stop-guard.js (seuil 95%, avant qu'une vraie coupure
+ *      ne survienne) : les deux chemins doivent aboutir à la même reprise
+ *      automatique supervisée (terminal visible + instruction injectée, voir
+ *      resume-after-reset.js), pas de logique dupliquée ni divergente.
  *   3. Toast immédiat récapitulant ce qui a été fait.
  *
  * L'heure de réinitialisation vient du snapshot statusline
@@ -30,25 +32,12 @@
 
 const fs = require("fs");
 const path = require("path");
-const { spawnSync } = require("child_process");
 const { showToast } = require("./lib/toast");
+const { findResetMs, formatTime, scheduleResume, resolveClaudeBin } = require("./lib/resume-scheduler");
 
 const CREDIT_ERRORS = new Set(["billing_error", "rate_limit"]);
 const TAIL_LINES = 40;
 const RESUME_DELAY_MS = 60 * 1000;
-const SCHEDULE_TIMEOUT_MS = 30000;
-
-// Script PowerShell constant — toutes les données variables (nom de tâche,
-// heure, chemins, session id) passent par variables d'environnement, jamais
-// concaténées dans le code : même motif anti-injection que lib/toast.js.
-const SCHEDULE_PS = [
-  "$ErrorActionPreference = 'Stop'",
-  "$action = New-ScheduledTaskAction -Execute $env:HARNAIS_NODE -Argument ('\"{0}\" \"{1}\" \"{2}\"' -f $env:HARNAIS_SCRIPT, $env:HARNAIS_SESSION_ID, $env:HARNAIS_PROJECT_DIR) -WorkingDirectory $env:HARNAIS_PROJECT_DIR",
-  "$trigger = New-ScheduledTaskTrigger -Once -At ([datetime]::Parse($env:HARNAIS_RESUME_AT))",
-  "$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable",
-  "Register-ScheduledTask -TaskName $env:HARNAIS_TASK_NAME -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null",
-  "Write-Output 'task-registered-ok'",
-].join("; ");
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -58,44 +47,6 @@ function readStdin() {
     process.stdin.on("end", () => resolve(data));
     process.stdin.on("error", () => resolve(""));
   });
-}
-
-function loadJson(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch (e) {
-    return null;
-  }
-}
-
-function toEpochMs(value) {
-  const n = Number(value);
-  if (!n || !isFinite(n)) return null;
-  return n < 1e12 ? n * 1000 : n;
-}
-
-// Nom de tâche stable par session : re-déclencher le hook (retry de prompt
-// après coupure) remplace la tâche (-Force) au lieu d'en empiler.
-function taskNameFor(sessionId) {
-  return `HarnaisResume_${String(sessionId).replace(/[^a-zA-Z0-9-]/g, "").slice(0, 8) || "inconnu"}`;
-}
-
-// Heure de réinitialisation : snapshot d'abord, sinon epoch dans error_details.
-function findResetMs(projectDir, errorDetails, now) {
-  const snapshot = loadJson(path.join(projectDir, ".claude", "statusline-snapshot.json"));
-  const fromSnapshot = snapshot && snapshot.five_hour ? toEpochMs(snapshot.five_hour.resets_at) : null;
-  if (fromSnapshot && fromSnapshot > now) return fromSnapshot;
-  const m = /\b(\d{10})\b/.exec(errorDetails || "");
-  if (m) {
-    const fromDetails = toEpochMs(m[1]);
-    if (fromDetails && fromDetails > now) return fromDetails;
-  }
-  return null;
-}
-
-function formatTime(ms) {
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function appendRawCheckpoint(projectDir, payload) {
@@ -121,47 +72,6 @@ function appendRawCheckpoint(projectDir, payload) {
   try {
     fs.appendFileSync(path.join(projectDir, ".claude", "session-log.md"), entry, "utf8");
     return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-function scheduleResume(projectDir, sessionId, resumeAtMs) {
-  const env = {
-    ...process.env,
-    HARNAIS_TASK_NAME: taskNameFor(sessionId),
-    HARNAIS_RESUME_AT: new Date(resumeAtMs).toISOString(),
-    HARNAIS_NODE: process.execPath,
-    HARNAIS_SCRIPT: path.join(__dirname, "resume-after-reset.js"),
-    HARNAIS_SESSION_ID: String(sessionId),
-    HARNAIS_PROJECT_DIR: projectDir,
-  };
-  if (process.env.WATCHDOG_DRY_RUN === "1") {
-    // Sortie pour les assertions de test — le stdout d'un hook StopFailure
-    // est ignoré par Claude Code, on ne pollue rien en réel.
-    process.stdout.write(
-      JSON.stringify({
-        dryRun: true,
-        wouldSchedule: {
-          taskName: env.HARNAIS_TASK_NAME,
-          resumeAt: env.HARNAIS_RESUME_AT,
-          script: env.HARNAIS_SCRIPT,
-          sessionId: env.HARNAIS_SESSION_ID,
-          projectDir: env.HARNAIS_PROJECT_DIR,
-        },
-      })
-    );
-    return true;
-  }
-  try {
-    const res = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", SCHEDULE_PS], {
-      env,
-      encoding: "utf8",
-      windowsHide: true,
-      timeout: SCHEDULE_TIMEOUT_MS,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    return res.status === 0 && (res.stdout || "").includes("task-registered-ok");
   } catch (e) {
     return false;
   }
@@ -193,7 +103,7 @@ async function main() {
     let resumeAtMs = null;
     if (resetMs) {
       resumeAtMs = resetMs + RESUME_DELAY_MS;
-      scheduled = scheduleResume(projectDir, sessionId, resumeAtMs);
+      scheduled = scheduleResume(projectDir, sessionId, resumeAtMs, resolveClaudeBin());
     }
 
     showToast(

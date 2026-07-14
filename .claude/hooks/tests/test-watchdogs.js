@@ -47,6 +47,10 @@ for (const raw of [undefined, "", "{}", "pas du json"]) {
     check(`context-watchdog ${event || "(sans event)"} payload=${JSON.stringify(raw)} => exit 0`, res.status === 0);
   }
   check(`credit-watchdog payload=${JSON.stringify(raw)} => exit 0`, run("credit-watchdog.js", [], raw).status === 0);
+  for (const event of ["PostToolUse", "Stop", "PostCompact", "", "Inconnu"]) {
+    const res = run("hard-stop-guard.js", [event], raw);
+    check(`hard-stop-guard ${event || "(sans event)"} payload=${JSON.stringify(raw)} => exit 0`, res.status === 0);
+  }
 }
 check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [], "").status === 0);
 
@@ -78,14 +82,14 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
   const snap = (ctx, extra) => writeSnapshot(dir, { session_id: "s-ctx", ts: Date.now(), context_used_percentage: ctx, ...extra });
 
   check("sans snapshot => silence", prompt("s-ctx").stdout === "");
-  snap(84);
-  check("ctx 84% => silence (sous le seuil)", prompt("s-ctx").stdout === "");
-  snap(87);
+  snap(69);
+  check("ctx 69% => silence (sous le seuil)", prompt("s-ctx").stdout === "");
+  snap(72);
   const warned = prompt("s-ctx");
-  check("ctx 87% => injection additionalContext", warned.stdout.includes("additionalContext"));
-  check("ctx 87% => ordonne session-checkpoint", warned.stdout.includes("session-checkpoint"));
-  check("ctx 87% => mentionne le pourcentage", warned.stdout.includes("87%"));
-  check("ctx 87% une deuxième fois => silence (déjà signalé)", prompt("s-ctx").stdout === "");
+  check("ctx 72% => injection additionalContext", warned.stdout.includes("additionalContext"));
+  check("ctx 72% => ordonne session-checkpoint", warned.stdout.includes("session-checkpoint"));
+  check("ctx 72% => mentionne le pourcentage", warned.stdout.includes("72%"));
+  check("ctx 72% une deuxième fois => silence (déjà signalé)", prompt("s-ctx").stdout === "");
   run("context-watchdog.js", ["PostCompact"], { session_id: "s-ctx", cwd: dir }, env);
   check("après PostCompact => le seuil est ré-armé", prompt("s-ctx").stdout.includes("additionalContext"));
 
@@ -132,6 +136,7 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
   const dry = JSON.parse(res.stdout);
   check("planification : nom de tâche dérivé de la session", dry.wouldSchedule.taskName === "HarnaisResume_abcd1234");
   check("planification : reprise = reset + 60s", Date.parse(dry.wouldSchedule.resumeAt) === resetSec * 1000 + 60000);
+  check("planification : binaire claude résolu (dry-run => 'claude')", dry.wouldSchedule.claudeBin === "claude");
 
   // Snapshot inutilisable (reset passé) mais epoch dans error_details.
   writeSnapshot(dir, { session_id: "abcd1234-xyz", ts: Date.now(), five_hour: { used_percentage: 100, resets_at: resetSec - 7200 } });
@@ -150,24 +155,196 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-// --- resume-after-reset : --resume si le transcript existe, session neuve sinon ---
+// --- resume-after-reset : reprise auto si le transcript existe, session neuve sinon ---
 {
   const dir = mkProject();
   const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "watchdog-home-"));
   const flat = dir.replace(/[^a-zA-Z0-9]/g, "-");
   const homeEnv = { USERPROFILE: fakeHome, HOME: fakeHome };
+  const claudeBin = "C:\\fake\\claude.cmd";
 
-  const resNoTranscript = run("resume-after-reset.js", ["sess-1234-abc", dir], "", homeEnv);
-  check("transcript absent => session neuve (pas de --resume)", JSON.parse(resNoTranscript.stdout).claudeArgs.length === 0);
+  const resNoTranscript = run("resume-after-reset.js", ["sess-1234-abc", dir, claudeBin], "", homeEnv);
+  const outNoTranscript = JSON.parse(resNoTranscript.stdout);
+  check("transcript absent => pas de reprise (canResume=false)", outNoTranscript.canResume === false);
+  check("transcript absent => pas d'arguments claude construits", (outNoTranscript.claudeArgs || []).length === 0);
 
   fs.mkdirSync(path.join(fakeHome, ".claude", "projects", flat), { recursive: true });
   fs.writeFileSync(path.join(fakeHome, ".claude", "projects", flat, "sess-1234-abc.jsonl"), "{}");
-  const resTranscript = run("resume-after-reset.js", ["sess-1234-abc", dir], "", homeEnv);
-  const out = JSON.parse(resTranscript.stdout);
-  check("transcript présent => claude --resume <session>", out.claudeArgs.join(" ") === "--resume sess-1234-abc");
-  check("la tâche à supprimer porte le nom dérivé", out.wouldDeleteTask === "HarnaisResume_sess-123");
+
+  // Sans section "En cours / bloqué" exploitable dans SESSION.md => repli générique.
+  const resFallback = run("resume-after-reset.js", ["sess-1234-abc", dir, claudeBin], "", homeEnv);
+  const outFallback = JSON.parse(resFallback.stdout);
+  check("transcript présent => canResume=true", outFallback.canResume === true);
+  check("transcript présent => binaire claude transmis", outFallback.claudeBinPath === claudeBin);
+  check("pas de SESSION.md => instruction de repli générique", outFallback.instructionPreview.includes("SESSION.md"));
+  check("la tâche à supprimer porte le nom dérivé", outFallback.wouldDeleteTask === "HarnaisResume_sess-123");
+
+  // Avec une section "En cours / bloqué" précise => l'instruction la reprend.
+  fs.writeFileSync(
+    path.join(dir, "SESSION.md"),
+    "# SESSION.md\n\n## Fait\n- Rien\n\n## En cours / bloqué\nÉditer hard-stop-guard.js, whitelist à finir.\n\n## Prochaines étapes\n- Tests\n"
+  );
+  const resTask = run("resume-after-reset.js", ["sess-1234-abc", dir, claudeBin], "", homeEnv);
+  const outTask = JSON.parse(resTask.stdout);
+  check(
+    "section 'En cours / bloqué' présente => reprise dans l'instruction",
+    outTask.instructionPreview.includes("hard-stop-guard.js")
+  );
+
   fs.rmSync(dir, { recursive: true, force: true });
   fs.rmSync(fakeHome, { recursive: true, force: true });
+}
+
+// --- hard-stop-guard : arrêt dur contexte/crédits, whitelist, plafond ---
+{
+  const dir = mkProject();
+  const env = { CLAUDE_PROJECT_DIR: dir };
+  const tool = (sid, toolName, toolInput) =>
+    run("hard-stop-guard.js", ["PostToolUse"], { session_id: sid, cwd: dir, tool_name: toolName, tool_input: toolInput || {} }, env);
+  const snap = (sid, ctx, extra) =>
+    writeSnapshot(dir, { session_id: sid, ts: Date.now(), context_used_percentage: ctx, ...extra });
+
+  // Sous le seuil : passthrough silencieux.
+  snap("s-hs-ctx", 50);
+  const passthrough = tool("s-hs-ctx", "Bash", { command: "ls" });
+  check("contexte 50% => exit 0", passthrough.status === 0);
+  check("contexte 50% => stdout silencieux", passthrough.stdout === "");
+
+  // Franchissement du seuil dur (85%) : la commande qui vient de faire
+  // franchir le seuil s'est déjà exécutée avant que le hook ne tourne (limite
+  // assumée, PostToolUse) — mais l'appel suivant est bien bloqué.
+  snap("s-hs-ctx", 86);
+  tool("s-hs-ctx", "Bash", { command: "ls" }); // franchissement, pose le flag
+  const blocked = tool("s-hs-ctx", "Bash", { command: "echo hi" });
+  check("contexte ≥85% => exit 2 sur l'appel suivant", blocked.status === 2);
+  check("contexte ≥85% => message d'ordre de checkpoint", blocked.stderr.includes("SESSION.md"));
+
+  // Whitelist : Read toujours permis, Write/Edit uniquement sur les 2 fichiers.
+  check("Read quelconque => toujours autorisé en hard-stop", tool("s-hs-ctx", "Read", { file_path: "n_importe_quoi.txt" }).status === 0);
+  check(
+    "Write sur SESSION.md => autorisé",
+    tool("s-hs-ctx", "Write", { file_path: path.join(dir, "SESSION.md") }).status === 0
+  );
+  check(
+    "Edit sur .claude/session-log.md (chemin relatif) => autorisé",
+    tool("s-hs-ctx", "Edit", { file_path: ".claude/session-log.md" }).status === 0
+  );
+  check(
+    "Write sur un autre fichier => bloqué",
+    tool("s-hs-ctx", "Write", { file_path: path.join(dir, "autre.md") }).status === 2
+  );
+  check("PowerShell => bloqué quel que soit tool_input", tool("s-hs-ctx", "PowerShell", { command: "Get-Date" }).status === 2);
+
+  // Persistance : même si le contexte redescend, le hard-stop reste actif
+  // (pas de ré-armement automatique, seul PostCompact le fait).
+  snap("s-hs-ctx", 10);
+  check("contexte redescendu à 10% => hard-stop toujours actif", tool("s-hs-ctx", "Bash", { command: "ls" }).status === 2);
+
+  // PostCompact manuel : réarme contextHardStop.
+  run("hard-stop-guard.js", ["PostCompact"], { session_id: "s-hs-ctx", cwd: dir }, env);
+  check("après PostCompact (contexte déjà bas) => hard-stop levé", tool("s-hs-ctx", "Bash", { command: "ls" }).status === 0);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// --- hard-stop-guard : arrêt dur crédits (proactif 95%), planification, fenêtre de reprise, plafond ---
+{
+  const dir = mkProject();
+  const env = { CLAUDE_PROJECT_DIR: dir };
+  const tool = (sid, toolName, toolInput) =>
+    run("hard-stop-guard.js", ["PostToolUse"], { session_id: sid, cwd: dir, tool_name: toolName, tool_input: toolInput || {} }, env);
+
+  const resetSec = Math.floor(Date.now() / 1000) + 3600;
+  writeSnapshot(dir, {
+    session_id: "s-hs-credit",
+    ts: Date.now(),
+    context_used_percentage: 10,
+    five_hour: { used_percentage: 96, resets_at: resetSec },
+  });
+
+  const firstBlock = tool("s-hs-credit", "Bash", { command: "ls" });
+  check("crédits ≥95% => exit 2", firstBlock.status === 2);
+  check("crédits ≥95% => message d'ordre de checkpoint", firstBlock.stderr.includes("SESSION.md"));
+  const dry = JSON.parse(firstBlock.stdout);
+  check("crédits ≥95% => planifie la reprise (resumeAt = reset + 60s)", Date.parse(dry.wouldSchedule.resumeAt) === resetSec * 1000 + 60000);
+
+  const secondBlock = tool("s-hs-credit", "Bash", { command: "ls" });
+  check("crédits ≥95% une 2e fois => bloqué mais pas replanifié (idempotent)", secondBlock.status === 2 && secondBlock.stdout === "");
+
+  // Read/Write SESSION.md restent autorisés pendant l'arrêt dur crédits.
+  check("Read autorisé pendant hard-stop crédits", tool("s-hs-credit", "Read", { file_path: "x.txt" }).status === 0);
+  check(
+    "Write SESSION.md autorisé pendant hard-stop crédits",
+    tool("s-hs-credit", "Write", { file_path: path.join(dir, "SESSION.md") }).status === 0
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// --- hard-stop-guard : fenêtre de reprise franchie => déblocage + plafond anti-emballement ---
+{
+  const dir = mkProject();
+  const env = { CLAUDE_PROJECT_DIR: dir };
+  const tool = (sid) =>
+    run("hard-stop-guard.js", ["PostToolUse"], { session_id: sid, cwd: dir, tool_name: "Bash", tool_input: { command: "ls" } }, env);
+  const stateFile = path.join(dir, ".claude", "watchdog-state.json");
+
+  // État pré-existant : arrêt dur crédits déjà posé, heure de reprise déjà
+  // passée (simule l'instant où la tâche planifiée vient de relancer la
+  // session) — sans dépendre d'un vrai sommeil de plusieurs heures en test.
+  fs.writeFileSync(
+    stateFile,
+    JSON.stringify({
+      "s-hs-resume": {
+        ts: Date.now(),
+        creditHardStop: true,
+        creditResumeScheduled: true,
+        autoResumeUnblockAt: Date.now() - 1000,
+      },
+    })
+  );
+
+  const first = tool("s-hs-resume");
+  check("fenêtre de reprise déjà ouverte => pas bloqué (crédits levés)", first.status === 0);
+
+  fs.writeFileSync(path.join(dir, ".claude", "watchdog-config.json"), JSON.stringify({ autoResumeMaxActions: 3 }));
+  tool("s-hs-resume"); // action 2
+  tool("s-hs-resume"); // action 3
+  const overCap = tool("s-hs-resume"); // action 4 : dépasse le plafond de 3
+  check("plafond de reprise dépassé => hard-stop forcé (exit 2)", overCap.status === 2);
+  check("plafond de reprise dépassé => message mentionne le plafond", overCap.stderr.includes("plafond"));
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// --- hard-stop-guard : Stop nettoie l'état de reprise auto, sans y toucher si absent ---
+{
+  const dir = mkProject();
+  const env = { CLAUDE_PROJECT_DIR: dir };
+  const stateFile = path.join(dir, ".claude", "watchdog-state.json");
+
+  fs.writeFileSync(
+    stateFile,
+    JSON.stringify({
+      "s-hs-stop": {
+        ts: Date.now(),
+        creditHardStop: true,
+        creditResumeScheduled: true,
+        autoResumeUnblockAt: Date.now() - 1000,
+        autoResumeActive: true,
+        autoResumeActionCount: 5,
+      },
+      "s-hs-other": { ts: Date.now(), contextWarned: true },
+    })
+  );
+
+  run("hard-stop-guard.js", ["Stop"], { session_id: "s-hs-stop", cwd: dir }, env);
+  const stateAfter = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+  check("Stop avec autoResumeActive => nettoie l'épisode de reprise", !stateAfter["s-hs-stop"].autoResumeActive);
+  check("Stop avec autoResumeActive => nettoie creditHardStop", !stateAfter["s-hs-stop"].creditHardStop);
+  check("Stop => ne touche pas l'entrée d'une autre session", stateAfter["s-hs-other"].contextWarned === true);
+
+  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 console.log(`${pass}/${pass + fails.length} tests OK`);

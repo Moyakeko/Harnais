@@ -1,4 +1,5 @@
 {
+  "autoCompactEnabled": false,
   "hooks": {
     "PreToolUse": [
       {
@@ -49,12 +50,30 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/hard-stop-guard.js\" PostToolUse"
+          }
+        ]
+      }
+    ],
     "PostCompact": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/context-watchdog.js\" PostCompact"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/hard-stop-guard.js\" PostCompact"
           }
         ]
       }
@@ -76,6 +95,14 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/notify-desktop.js\" Stop"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/hard-stop-guard.js\" Stop"
           }
         ]
       }

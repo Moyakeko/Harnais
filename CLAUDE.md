@@ -117,17 +117,35 @@ s'appuient dessus plutôt que de réinventer leur logique.
 - Le contenu de `SESSION.md` apparaît automatiquement en tout début de session (hook
   `SessionStart`) sans que tu aies rien demandé — normal, c'est voulu. S'il est absent ou
   vide, la session démarre quand même normalement.
-- Si un message d'un hook du harnais t'ordonne d'exécuter `session-checkpoint`
-  (« contexte à 85 % » ou « crédits presque épuisés »), obéis immédiatement, avant de
-  traiter la demande courante de l'utilisateur — c'est le `context-watchdog` qui parle,
-  pas l'utilisateur, et il ne le dit qu'une fois. Il n'existe aucun `/clear`
-  automatique : ce checkpoint forcé + l'auto-compact intégré en tiennent lieu.
-- Quand les crédits s'épuisent en pleine session, le hook `credit-watchdog` (StopFailure)
-  sauvegarde l'état brut dans `session-log.md` et crée une **tâche planifiée Windows**
-  qui, à l'heure de réinitialisation + 1 min, envoie un toast donnant la commande
-  `claude --resume <session>` — c'est l'utilisateur qui la lance lui-même (l'ouverture
-  automatique d'un terminal a été testée puis retirée sur sa demande). Ne « nettoie »
-  jamais une tâche `HarnaisResume_*` sans demander.
+- **L'auto-compact natif est désactivé** (`autoCompactEnabled: false` dans
+  `settings.json`) : le socle prend intégralement le relais du contrôle de contexte, il
+  ne compose plus avec l'auto-compact intégré. Deux niveaux de surveillance, tous deux
+  basés sur le snapshot écrit par `statusline.js` :
+  - `context-watchdog.js` (`UserPromptSubmit`) : simple rappel non bloquant à 70 %, une
+    fois par session, ordonnant d'exécuter `session-checkpoint`.
+  - `hard-stop-guard.js` (`PostToolUse`, vérifié après CHAQUE outil — pas seulement à
+    l'envoi d'un message) : **arrêt DUR** à 85 % du contexte. Si un message d'ordre de ce
+    hook apparaît (stderr d'un tool bloqué), obéis immédiatement : seuls `Read`
+    (n'importe quel fichier) et `Write`/`Edit` sur `SESSION.md`/`.claude/session-log.md`
+    restent autorisés. Termine le checkpoint dans ces deux fichiers puis dis à
+    l'utilisateur de fermer la session et d'en ouvrir une nouvelle (ou `/clear`) —
+    n'essaie pas de continuer la tâche interrompue avec d'autres outils, le hook te
+    bloquera à chaque tentative. Ce blocage n'est jamais réarmé seul : seul un
+    `/compact` manuel ou une nouvelle session repart propre.
+- Le même `hard-stop-guard.js` applique un arrêt dur analogue aux crédits de la fenêtre
+  5h, à 95 % (en plus du rappel doux de `context-watchdog.js` à 90 %) : il planifie une
+  **reprise automatique** à la réinitialisation — `resume-after-reset.js` ouvre alors
+  lui-même un terminal visible avec `claude --resume <session>` et une instruction de
+  continuation injectée (bornée à la tâche en cours, section "En cours / bloqué" de
+  `SESSION.md`). Ceci inverse un choix antérieur (V1.7 : reprise "jamais headless",
+  toast seul) sur demande explicite de l'utilisateur — voir SOURCES.md V1.9. Un plafond
+  d'actions (`.claude/watchdog-config.json`, défaut 30) et le retour du contexte à 85 %
+  forcent un nouvel arrêt dur si la reprise s'emballe. Ne « nettoie » jamais une tâche
+  planifiée `HarnaisResume_*` sans demander.
+- Le chemin RÉACTIF `credit-watchdog.js` (`StopFailure`, coupure crédits déjà survenue
+  sans avoir été anticipée) reste en place en complément, avec la même logique de
+  planification/reprise (factorisée dans `.claude/hooks/lib/resume-scheduler.js`,
+  partagée avec le chemin proactif de `hard-stop-guard.js`).
 - La skill `update-harnais` télécharge `install.ps1`/`install.sh` dans un fichier puis
   l'exécute directement (deux étapes séparées, jamais pipées) — ce n'est pas un
   contournement du hook de garde, c'est précisément le mécanisme que ce même CLAUDE.md
@@ -138,7 +156,7 @@ s'appuient dessus plutôt que de réinventer leur logique.
 
 Pas de système de mémoire/apprentissage continu façon ECC, pas de couche sécurité
 multi-agents, pas de règles par langage séparées. Le socle reste à 8 skills + 2 agents +
-6 hooks (+ 1 statusline) par choix délibéré — à faire évoluer via `skill-builder` si le
+7 hooks (+ 1 statusline) par choix délibéré — à faire évoluer via `skill-builder` si le
 besoin s'en fait sentir, pas par défaut. Pour toute évolution du socle lui-même (scripts
 d'auto-amélioration, adaptation à un autre modèle, durcissement entreprise, futur
 mécanisme de checkpoint/rollback) : lis `EVOLUTION.md` d'abord — il fixe les invariants

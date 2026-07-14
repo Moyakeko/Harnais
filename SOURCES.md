@@ -223,3 +223,68 @@ logique avec `install.ps1`/`install.sh` pour un gain purement cosmétique de nom
 une confirmation bloquante supplémentaire avant le téléchargement (invoquer la skill
 explicitement est déjà la confirmation) ; toute tentative de recharger les hooks à
 chaud (n'existe pas côté Claude Code).
+
+### V1.9 — arrêt dur contexte/crédits, inversion de deux choix V1.7 (2026-07-12)
+
+**Origine** : demande directe de l'utilisateur (idée née d'un post Instagram) — l'IA
+hallucine et dégrade dans le dernier quart avant l'auto-compact natif (~100 %) ; il
+préfère un arrêt net et contrôlé (checkpoint + fermeture/nouvelle session) plutôt que
+subir une compression automatique du contexte. Étendu ensuite, sur sa demande
+explicite, aux crédits de la fenêtre 5h avec une reprise automatique bornée.
+
+**Retenu** :
+- **Auto-compact natif désactivé** (`autoCompactEnabled: false`) : le socle prend
+  intégralement le relais du contrôle de contexte plutôt que de composer avec lui.
+- **Deux niveaux au lieu d'un** : `context-watchdog.js` reste un rappel doux, non
+  bloquant, mais son seuil descend de 85 % à 70 % (`UserPromptSubmit` uniquement) ;
+  un nouveau hook `hard-stop-guard.js` (`PostToolUse`, sans matcher — vérifié après
+  CHAQUE outil, pas seulement à l'envoi d'un message) impose un arrêt DUR à 85 % :
+  blocage (`exit 2`, même mécanisme que `guard-dangerous-commands.js`) de tout outil
+  sauf `Read` (n'importe quel fichier) et `Write`/`Edit` sur `SESSION.md` /
+  `.claude/session-log.md`, pour forcer le checkpoint puis l'arrêt de la session par
+  l'utilisateur. Jamais réarmé seul : seul un `/compact` manuel (event `PostCompact`)
+  ou une nouvelle session repart propre.
+- **Limite assumée et documentée** : `PostToolUse` s'exécute après l'outil — il ne
+  peut pas empêcher celui qui vient de faire franchir le seuil, seulement contraindre
+  le suivant. Accepté en connaissance de cause : c'est le seul event qui se déclenche
+  après chaque outil plutôt qu'à l'envoi d'un message, condition explicitement
+  demandée par l'utilisateur.
+- **Inversion n°1 — seuil auto-compact configurable** : jugé absent de Claude Code en
+  V1.7 (`autoCompactEnabled` existe bel et bien, vérifié via la doc officielle en
+  V1.9) ET le socle ne cherche plus à composer avec l'auto-compact natif : il le
+  désactive et le remplace entièrement.
+- **Inversion n°2 — reprise crédits "jamais headless"** : le choix explicite de V1.7
+  ("l'humain relance à sa main, pas de fenêtre qui s'ouvre seule") est renversé sur
+  demande explicite de l'utilisateur. Arrêt dur proactif à 95 % des crédits 5h
+  (mêmes règles de blocage que le contexte) : planifie la reprise (logique
+  factorisée dans `lib/resume-scheduler.js`, partagée avec `credit-watchdog.js` —
+  chemin réactif `StopFailure` inchangé par ailleurs) puis, à la réinitialisation,
+  `resume-after-reset.js` ouvre un terminal VISIBLE (`Start-Process`, jamais
+  `cmd start`) avec `claude --resume <session>` et une instruction de continuation
+  injectée automatiquement (extraite de la section "En cours / bloqué" de
+  `SESSION.md`) — bornée à la tâche en cours, rien d'autre.
+- **Le blocage crédits est borné dans le temps, pas permanent** : `--resume` continue
+  le MÊME `session_id`, donc la même entrée d'état (`watchdog-state.json`) est
+  partagée entre la session bloquée et sa reprise. Le blocage reste actif tant que
+  l'heure planifiée (`autoResumeUnblockAt`) n'est pas atteinte ; une fois franchie, il
+  se lève de lui-même et seul le plafond anti-emballement prend le relais.
+- **Plafond de sécurité anti-emballement** (demande explicite de l'utilisateur) :
+  nombre d'actions d'outil pendant la reprise automatique (`.claude/watchdog-
+  config.json`, `autoResumeMaxActions`, défaut 30, optionnel) OU contexte remontant
+  à ≥85% pendant la reprise → force le même arrêt dur. L'event `Stop` avec
+  `autoResumeActive` posé nettoie tout l'état crédits de l'épisode (jamais ambigu
+  avec une session interactive classique, ce flag n'étant posé qu'au moment de
+  planifier une reprise).
+
+**Non vérifié empiriquement au moment de l'implémentation, à valider avant de
+considérer acquis** (voir SESSION.md) : que `claude --resume <id> "texte"` accepte
+bien un argument positionnel comme premier message en mode interactif après reprise ;
+que le hook `hard-stop-guard.js` bloque réellement en conditions réelles (nécessite
+une session fraîche, les hooks ne se rechargent pas à chaud — seule la batterie
+dry-run de `.claude/hooks/tests/test-watchdogs.js` a été vérifiée à ce stade).
+
+**Écarté** : un plafond basé sur une durée plutôt qu'un nombre d'actions (moins
+prévisible d'un modèle/tâche à l'autre) ; une reprise headless silencieuse
+(`claude -p`, envisagée puis explicitement écartée par l'utilisateur au profit d'un
+terminal visible) ; un second fichier de hook séparé pour les crédits (dupliquerait
+la logique de blocage/whitelist, déjà identique à celle du contexte).

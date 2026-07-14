@@ -1,25 +1,25 @@
 #!/usr/bin/env node
 /**
- * Hooks UserPromptSubmit / PostCompact — surveille le remplissage du contexte
- * et l'usage des crédits via le snapshot écrit par statusline.js (seul canal
- * qui expose ces données — aucun hook ne les reçoit directement, vérifié dans
- * le binaire v2.1.204).
+ * Hooks UserPromptSubmit / PostCompact — avertissement DOUX (jamais bloquant),
+ * premier des deux niveaux de surveillance du contexte/crédits. Le niveau dur
+ * (blocage réel après chaque outil, pas seulement à l'envoi d'un message) vit
+ * dans hard-stop-guard.js (PostToolUse) depuis que l'auto-compact natif est
+ * désactivé (autoCompactEnabled: false, voir settings.json) — ce fichier-ci ne
+ * fait plus qu'un rappel précoce pendant qu'il reste large marge.
  *
- *   - Contexte ≥ 85% : injecte comme contexte additionnel l'ordre d'exécuter
- *     la skill session-checkpoint AVANT de traiter le message courant. C'est
- *     le substitut assumé au « /clear automatique » demandé initialement :
- *     /clear et /compact ne sont déclenchables par aucun hook ni SDK
- *     (vérifié) — le harnais force donc un checkpoint riche pendant qu'il
- *     reste du contexte pour le rédiger, puis laisse l'auto-compact intégré
- *     faire la continuité (avec precompact-safety-net.js en filet brut).
+ * Lit le snapshot écrit par statusline.js (seul canal qui expose ces données —
+ * aucun hook ne les reçoit directement, vérifié dans le binaire v2.1.204).
+ *
+ *   - Contexte ≥ 70% : injecte comme contexte additionnel l'ordre d'exécuter
+ *     la skill session-checkpoint AVANT de traiter le message courant — un
+ *     rappel précoce avant que hard-stop-guard.js ne bloque à 85%.
  *   - Crédits 5h ≥ 90% : même mécanisme, simple avertissement pour
- *     checkpointer avant la coupure (credit-watchdog.js prend le relais si
- *     elle survient quand même).
+ *     checkpointer avant l'arrêt dur crédits (hard-stop-guard.js à 95%).
  *
  * Chaque seuil n'est signalé qu'UNE fois par session (flags dans
  * .claude/watchdog-state.json) pour ne pas polluer chaque prompt ; le flag
  * contexte est ré-armé par l'événement PostCompact (le contexte est alors
- * redescendu, un futur 85% redevient signifiant).
+ * redescendu, un futur 70% redevient signifiant).
  *
  * Garde-fous de validité du snapshot : même session ET moins de 5 min d'âge,
  * sinon on ne dit rien (un snapshot d'une autre session ou d'hier ferait
@@ -29,7 +29,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const CONTEXT_THRESHOLD_PCT = 85;
+const CONTEXT_THRESHOLD_PCT = 70;
 const CREDIT_THRESHOLD_PCT = 90;
 const SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
 const STATE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -120,9 +120,9 @@ async function main() {
       warnings.push(
         `⚠️ ORDRE DU HARNAIS (hook context-watchdog) : le contexte est à ${Math.round(ctx)}% — ` +
           `exécute la skill session-checkpoint MAINTENANT, avant de traiter le message ci-dessus. ` +
-          `L'auto-compact approche : SESSION.md et .claude/session-log.md doivent capturer l'état ` +
-          `pendant qu'il reste du contexte pour le rédiger. Une fois le checkpoint fait, reprends ` +
-          `le message de l'utilisateur normalement.`
+          `L'arrêt dur (hard-stop-guard.js) se déclenche à 85% : SESSION.md et ` +
+          `.claude/session-log.md doivent capturer l'état pendant qu'il reste de la marge pour le ` +
+          `rédiger. Une fois le checkpoint fait, reprends le message de l'utilisateur normalement.`
       );
     }
 
@@ -138,8 +138,8 @@ async function main() {
       warnings.push(
         `⚠️ Avertissement du harnais : ${Math.round(fiveHour.used_percentage)}% des crédits 5h sont ` +
           `consommés${reset ? ` (réinitialisation à ${reset})` : ""}. Fais un point session-checkpoint ` +
-          `dès la prochaine étape franchie ; si la coupure survient, le hook credit-watchdog ` +
-          `sauvegardera l'état brut et planifiera la reprise.`
+          `dès la prochaine étape franchie ; à 95% hard-stop-guard.js bloquera et planifiera une ` +
+          `reprise automatique à la réinitialisation.`
       );
     }
 
