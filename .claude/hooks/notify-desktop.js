@@ -37,6 +37,7 @@
 const fs = require("fs");
 const path = require("path");
 const { showToast } = require("./lib/toast");
+const { logMetric } = require("./lib/metrics");
 
 const STATE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -122,7 +123,10 @@ async function main() {
 
   // No-op silencieux hors Windows : après avoir vidé stdin pour ne jamais
   // laisser le process appelant bloqué sur un pipe plein.
-  if (process.platform !== "win32") process.exit(0);
+  if (process.platform !== "win32") {
+    logMetric("hook:notify-desktop", "skip", "non-windows");
+    process.exit(0);
+  }
 
   try {
     let payload = {};
@@ -147,6 +151,7 @@ async function main() {
       entry.seq += 1;
       state[sessionId] = entry;
       saveState(stateFile, state);
+      logMetric("hook:notify-desktop", "seq", `seq=${entry.seq}`);
       process.exit(0);
     }
 
@@ -155,9 +160,11 @@ async function main() {
       const subtitle = entry
         ? `Tâche #${entry.seq} terminée — durée : ${formatDuration(Date.now() - Date.parse(entry.startedAt))}`
         : "Tâche terminée (durée inconnue)";
-      if (config.stop) showToast(projectName, subtitle);
+      const toasted = !!config.stop;
+      if (toasted) showToast(projectName, subtitle);
       delete state[sessionId];
       saveState(stateFile, state);
+      logMetric("hook:notify-desktop", "stop", toasted ? "toast" : "désactivé");
       process.exit(0);
     }
 
@@ -166,11 +173,14 @@ async function main() {
       const rule = NOTIFICATION_RULES.find((r) => r.test(message));
       const key = rule ? rule.key : "generic";
       if (config[key]) showToast(projectName, rule ? rule.subtitle : "Notification");
+      logMetric("hook:notify-desktop", "notification", `type=${key}`);
       process.exit(0);
     }
 
+    logMetric("hook:notify-desktop", "skip", `event=${event || "inconnu"}`);
     process.exit(0); // événement inconnu : no-op
   } catch (e) {
+    logMetric("hook:notify-desktop", "error", String(e).slice(0, 100));
     process.exit(0); // filet de sécurité absolu : ce hook ne fait jamais échouer la session
   }
 }

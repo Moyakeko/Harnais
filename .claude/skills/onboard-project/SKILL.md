@@ -51,3 +51,9 @@ reposer les questions.
 
 Ne génère pas d'arborescence `context/`/`connections/` façon AIS-OS complète — c'est trop
 lourd pour un usage solo multi-projets. Un seul fichier `PROJECT.md` suffit.
+
+## Télémétrie
+
+En fin de skill, journalise une ligne (best-effort, n'affecte jamais le déroulé si la
+commande échoue) :
+`node .claude/hooks/lib/metrics.js "skill:onboard-project" "onboarding" "<résumé court>"`

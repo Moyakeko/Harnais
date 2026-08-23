@@ -60,6 +60,22 @@ de garde :
    `.claude/harnais.version` du projet cible) suit la version du socle ; les
    marqueurs restent détectés quel que soit le numéro (mise à jour possible depuis
    n'importe quelle version antérieure).
+5. **Versionnage par tag git, pas par branche mouvante** (depuis V1.10) :
+   `install.sh`/`install.ps1`/`update-harnais` résolvent le dernier tag `vX.Y` publié
+   (`api.github.com/repos/.../tags`, comparaison numérique — un tri lexical ou
+   l'ordre brut de l'API classeraient `v1.10` avant `v1.9`), avec repli sur `main` si
+   aucun tag n'existe encore ou si l'API est inaccessible. Ça rend une installation
+   reproductible (deux personnes qui installent le même jour obtiennent le même
+   contenu) sans renoncer au bootstrap sur un dépôt tout neuf sans tag. Toute release
+   qui doit être distribuée passe donc par un tag `vX.Y` poussé, pas seulement un
+   commit sur `main`.
+6. **Diff avant application, systématique et non-interactif** (depuis V1.10) :
+   avant d'écrire un fichier déjà présent et différent de la cible (fichier possédé
+   modifié localement, fusion CLAUDE.md/.gitignore/settings.json), `apply.js` affiche
+   un diff ligne-à-ligne (LCS) de ce qui va changer. Ce n'est pas une confirmation
+   bloquante — l'installeur reste scriptable — mais une mise à jour qui remplace
+   silencieusement du contenu sans le montrer n'est pas acceptable pour une couche qui
+   touche `settings.json`/hooks/permissions.
 
 ## Scripts d'auto-amélioration — cadre
 

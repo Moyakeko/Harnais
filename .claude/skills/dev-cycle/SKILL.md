@@ -57,3 +57,9 @@ rapporte une synthèse plutôt que le détail brut de la revue.
 À la fin du cycle, un résumé court : ce qui a changé, comment ça a été vérifié
 concrètement (pas "les tests passent" en l'air — quels tests, quel résultat), et ce qui
 reste à faire s'il y a un suivi.
+
+## Télémétrie
+
+En fin de skill, journalise une ligne (best-effort, n'affecte jamais le déroulé si la
+commande échoue) :
+`node .claude/hooks/lib/metrics.js "skill:dev-cycle" "cycle" "<résumé court>"`

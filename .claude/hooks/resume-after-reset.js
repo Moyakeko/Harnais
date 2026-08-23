@@ -38,6 +38,7 @@ const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { showToast } = require("./lib/toast");
+const { logMetric } = require("./lib/metrics");
 
 const LAUNCH_TIMEOUT_MS = 15000;
 
@@ -150,6 +151,10 @@ function main() {
   const claudeBinPath = process.argv[4] || "claude";
   const projectName = path.basename(projectDir) || "Claude Code";
   const canResume = sessionId && transcriptExists(sessionId, projectDir);
+  // Ce script tourne hors du mécanisme de hooks Claude Code (lancé par une
+  // tâche planifiée) : CLAUDE_PROJECT_DIR n'est pas déjà positionné par
+  // l'appelant, contrairement aux autres hooks.
+  process.env.CLAUDE_PROJECT_DIR = projectDir;
 
   let instructionFile = null;
   let instructionPreview = null;
@@ -170,6 +175,7 @@ function main() {
           wouldDeleteTask: taskNameFor(sessionId),
         })
       );
+      logMetric("hook:resume-after-reset", "dry-run", `canResume=${canResume}`);
       process.exit(0);
     }
 
@@ -179,6 +185,7 @@ function main() {
     process.stdout.write(
       JSON.stringify({ dryRun: true, canResume, claudeArgs: [], wouldDeleteTask: taskNameFor(sessionId) })
     );
+    logMetric("hook:resume-after-reset", "dry-run", `canResume=${canResume}`);
     process.exit(0);
   }
 
@@ -200,6 +207,7 @@ function main() {
   } catch (e) {
     // Une tâche résiduelle est sans effet (déclencheur one-shot passé).
   }
+  logMetric("hook:resume-after-reset", canResume ? (launched ? "resumed" : "resume-failed") : "no-transcript", `session=${sessionId}`);
   process.exit(0);
 }
 

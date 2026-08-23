@@ -74,3 +74,9 @@ checklist ci-dessus ne suffit pas.
 Sortie courte : ce qui a été trouvé (ou "rien détecté"), et une ligne d'action par
 problème. Termine en rappelant que `/security-review` reste disponible pour une passe
 plus approfondie si le projet le justifie (auth, paiements, données sensibles).
+
+## Télémétrie
+
+En fin de skill, journalise une ligne (best-effort, n'affecte jamais le déroulé si la
+commande échoue) :
+`node .claude/hooks/lib/metrics.js "skill:security-audit" "audit" "<résumé court>"`

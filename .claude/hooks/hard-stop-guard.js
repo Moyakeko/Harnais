@@ -52,6 +52,7 @@
 const fs = require("fs");
 const path = require("path");
 const { scheduleResume, resolveClaudeBin, toEpochMs } = require("./lib/resume-scheduler");
+const { logMetric } = require("./lib/metrics");
 
 const CONTEXT_HARD_STOP_PCT = 85;
 const CREDIT_HARD_STOP_PCT = 95;
@@ -141,16 +142,19 @@ async function main() {
     const entry = state[sessionId] || {};
 
     if (event === "PostCompact") {
+      const reset = !!entry.contextHardStop;
       if (entry.contextHardStop) {
         delete entry.contextHardStop;
         entry.ts = now;
         state[sessionId] = entry;
         saveState(stateFile, state);
       }
+      logMetric("hook:hard-stop-guard", reset ? "postcompact-reset" : "postcompact-noop", `session=${sessionId}`);
       process.exit(0);
     }
 
     if (event === "Stop") {
+      const reset = !!entry.autoResumeActive;
       if (entry.autoResumeActive) {
         delete entry.autoResumeActive;
         delete entry.autoResumeActionCount;
@@ -161,10 +165,14 @@ async function main() {
         state[sessionId] = entry;
         saveState(stateFile, state);
       }
+      logMetric("hook:hard-stop-guard", reset ? "stop-reset" : "stop-noop", `session=${sessionId}`);
       process.exit(0);
     }
 
-    if (event !== "PostToolUse") process.exit(0);
+    if (event !== "PostToolUse") {
+      logMetric("hook:hard-stop-guard", "skip", `event=${event || "inconnu"}`);
+      process.exit(0);
+    }
 
     const snapshot = loadJson(path.join(projectDir, ".claude", "statusline-snapshot.json"));
     const snapshotValid =
@@ -239,11 +247,17 @@ async function main() {
     // repli existant de credit-watchdog.js (pas de planification à l'aveugle).
     const creditBlocking = entry.creditHardStop && !inResumeWindow;
     const hardStopActive = entry.contextHardStop || creditBlocking;
-    if (!hardStopActive) process.exit(0);
+    if (!hardStopActive) {
+      logMetric("hook:hard-stop-guard", "pass", "aucun seuil atteint");
+      process.exit(0);
+    }
 
     const toolName = payload.tool_name || "";
     const toolInput = payload.tool_input || {};
-    if (isWhitelisted(toolName, toolInput, projectDir)) process.exit(0);
+    if (isWhitelisted(toolName, toolInput, projectDir)) {
+      logMetric("hook:hard-stop-guard", "pass-whitelisted", `tool=${toolName}`);
+      process.exit(0);
+    }
 
     const reason =
       forcedReason ||
@@ -254,8 +268,11 @@ async function main() {
         : "crédits 5h ≥95%");
 
     process.stderr.write(blockMessage(reason));
+    const category = forcedReason ? "block-forced" : entry.contextHardStop && creditBlocking ? "block-both" : entry.contextHardStop ? "block-context" : "block-credits";
+    logMetric("hook:hard-stop-guard", category, reason);
     process.exit(2);
   } catch (e) {
+    logMetric("hook:hard-stop-guard", "error", String(e).slice(0, 100));
     process.exit(0); // Jamais bloquant sur erreur interne : fail-open comme les autres watchdogs.
   }
 }

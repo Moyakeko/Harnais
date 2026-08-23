@@ -75,3 +75,9 @@ Ne remplace pas un vrai système de gestion de projet (`ROADMAP.md`/tickets) pou
 builds de plusieurs jours — pour ce socle volontairement léger, un seul fichier pointeur
 suffit. Si un projet dérivé grossit au point d'avoir besoin de plus, c'est une décision à
 prendre via `skill-builder`, pas une extension automatique de cette skill.
+
+## Télémétrie
+
+En fin de skill, journalise une ligne (best-effort, n'affecte jamais le déroulé si la
+commande échoue) :
+`node .claude/hooks/lib/metrics.js "skill:session-checkpoint" "checkpoint" "<résumé court>"`

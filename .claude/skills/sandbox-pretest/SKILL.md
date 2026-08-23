@@ -73,3 +73,9 @@ d'installer Docker ou de le lire ligne à ligne d'abord.
   (secrets/hygiène), ni `deploy-checklist` (dont elle est une étape) — elle s'insère
   avant eux quand le risque le justifie.
 - Ne déploie rien.
+
+## Télémétrie
+
+En fin de skill, journalise une ligne (best-effort, n'affecte jamais le déroulé si la
+commande échoue) :
+`node .claude/hooks/lib/metrics.js "skill:sandbox-pretest" "pretest" "<résumé court>"`

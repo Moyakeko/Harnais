@@ -43,6 +43,8 @@
 // Aides
 // ---------------------------------------------------------------------------
 
+const { logMetric } = require("./lib/metrics");
+
 function stripQuotes(token) {
   return token.replace(/^["']+|["']+$/g, "");
 }
@@ -267,12 +269,14 @@ async function main() {
   } catch (err) {
     // Payload illisible : on ne bloque pas sur une erreur de parsing, on
     // laisse passer plutôt que de casser tous les appels d'outil.
+    logMetric("hook:guard-dangerous-commands", "skip", "payload illisible");
     process.exit(0);
   }
 
   const command = (payload.tool_input && payload.tool_input.command) || "";
 
   if (!command) {
+    logMetric("hook:guard-dangerous-commands", "skip", "commande vide");
     process.exit(0);
   }
 
@@ -285,10 +289,12 @@ async function main() {
           `(voir CLAUDE.md, règle n°2). Si tu as vraiment besoin de l'exécuter, ` +
           `fais-le toi-même dans ton propre terminal, hors Claude Code.\n`
       );
+      logMetric("hook:guard-dangerous-commands", "block", rule.name);
       process.exit(2);
     }
   }
 
+  logMetric("hook:guard-dangerous-commands", "allow", "aucune règle");
   process.exit(0);
 }
 

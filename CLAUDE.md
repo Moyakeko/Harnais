@@ -72,6 +72,8 @@ permission actif.
 | `skill-builder` | Pour créer une nouvelle skill du socle, ou dériver une version plus légère (ex: un socle "études uniquement"). |
 | `session-checkpoint` | Après une étape significative, avant une pause connue, ou sur "fais le point" — met à jour `SESSION.md`. |
 | `update-harnais` | Sur "mets à jour le harnais" — récupère la dernière version du socle sur un projet qui l'a déjà (additif, ne touche jamais `SESSION.md`). |
+| `find-skills` | Quand l'utilisateur cherche une skill existante pour une capacité qu'il n'a pas ("y a-t-il une skill pour X ?") — découverte/installation depuis l'écosystème `npx skills`, externe au socle. |
+| `harnais-report` | Sur "rapport d'usage"/"stats du harnais" — agrège `.claude/harnais-metrics.jsonl` en un résumé lisible (hooks/skills les plus invoqués, ratio block/allow, arrêts durs). |
 
 Skills globales déjà disponibles dans le harnais Claude Code (ne pas dupliquer) :
 `/verify` (vérification end-to-end d'un changement), `/code-review` (revue du diff
@@ -95,13 +97,17 @@ s'appuient dessus plutôt que de réinventer leur logique.
   officiel `curl … | sh` de rustup/nvm) — c'est voulu : l'utilisateur la lance lui-même
   dans son terminal.
 - `permissions.deny` dans `.claude/settings.json` empêche Claude de **lire** les fichiers
-  secrets du projet (`.env*`, `*.pem`, `*.key`, `secrets/`, états Terraform, clés SSH…)
-  et du home (`~/.ssh`, `~/.aws`, `~/.config/gh`…) — cette règle passe avant toute
-  autorisation accordée ailleurs. Le hook étend le même blocage aux lectures via shell
-  (`cat .env`), à l'exfiltration réseau et à `git add`. Conséquence assumée : un
-  `.env.example` versionné n'est pas lisible par l'outil Read (le pattern `.env.*` le
-  couvre) — si un template lisible par Claude est nécessaire, le nommer `env.example`
-  (sans point initial).
+  secrets du projet (`.env`, `.env.local`, `.env.*.local`, `.env.development`,
+  `.env.production`, `.env.test`, `.env.staging`, `*.pem`, `*.key`, `secrets/`, états
+  Terraform, clés SSH…) et du home (`~/.ssh`, `~/.aws`, `~/.config/gh`…) — cette règle
+  passe avant toute autorisation accordée ailleurs. Le hook étend le même blocage aux
+  lectures via shell (`cat .env`), à l'exfiltration réseau et à `git add`. Depuis V1.10,
+  la règle `.env` est une liste énumérée des vraies variantes sensibles, pas un wildcard
+  `.env.*` — `permissions.deny` ne supporte pas la négation (`!pattern`), un wildcard
+  large aurait donc aussi rendu `.env.example` illisible par l'outil Read. Un
+  `.env.example` versionné reste donc lisible tel quel ; seul un nom de variante non
+  énuméré (une variante d'environnement maison, par exemple) devrait être ajouté à la
+  liste au cas par cas plutôt que de revenir à un wildcard.
 - `disableBypassPermissionsMode: "disable"` dans `settings.json` empêche de démarrer ce
   projet en mode `--dangerously-skip-permissions` : hooks et deny ci-dessus restent
   actifs quoi qu'il arrive.
@@ -151,12 +157,19 @@ s'appuient dessus plutôt que de réinventer leur logique.
   contournement du hook de garde, c'est précisément le mécanisme que ce même CLAUDE.md
   prévoit pour ce cas (règle n°2) : le hook ne bloque qu'un pipe vers un interpréteur,
   pas un téléchargement de fichier suivi d'une exécution directe.
+- La skill `find-skills` peut faire exécuter `npx skills add <owner/repo@skill>` :
+  contrairement à `curl … | sh`, ce n'est **pas** une des cinq catégories bloquées par
+  `guard-dangerous-commands.js` (ce n'est ni un pipe vers un interpréteur, ni une
+  suppression, ni du git destructif) — le hook laisse donc passer l'installation d'une
+  skill tierce. La vigilance normale s'applique : c'est du code non fiable par défaut,
+  vérifie la réputation de la source avant d'installer (voir la skill elle-même), et
+  `sandbox-pretest` reste l'outil si le doute persiste après coup.
 
 ## Ce qui est volontairement absent (pour l'instant)
 
 Pas de système de mémoire/apprentissage continu façon ECC, pas de couche sécurité
-multi-agents, pas de règles par langage séparées. Le socle reste à 8 skills + 2 agents +
-7 hooks (+ 1 statusline) par choix délibéré — à faire évoluer via `skill-builder` si le
+multi-agents, pas de règles par langage séparées. Le socle reste à 10 skills + 2 agents +
+8 hooks (+ 1 statusline) par choix délibéré — à faire évoluer via `skill-builder` si le
 besoin s'en fait sentir, pas par défaut. Pour toute évolution du socle lui-même (scripts
 d'auto-amélioration, adaptation à un autre modèle, durcissement entreprise, futur
 mécanisme de checkpoint/rollback) : lis `EVOLUTION.md` d'abord — il fixe les invariants

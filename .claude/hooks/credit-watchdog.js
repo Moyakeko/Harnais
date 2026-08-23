@@ -34,6 +34,7 @@ const fs = require("fs");
 const path = require("path");
 const { showToast } = require("./lib/toast");
 const { findResetMs, formatTime, scheduleResume, resolveClaudeBin } = require("./lib/resume-scheduler");
+const { logMetric } = require("./lib/metrics");
 
 const CREDIT_ERRORS = new Set(["billing_error", "rate_limit"]);
 const TAIL_LINES = 40;
@@ -79,7 +80,10 @@ function appendRawCheckpoint(projectDir, payload) {
 
 async function main() {
   const raw = await readStdin();
-  if (process.platform !== "win32") process.exit(0);
+  if (process.platform !== "win32") {
+    logMetric("hook:credit-watchdog", "skip", "non-windows");
+    process.exit(0);
+  }
 
   try {
     let payload = {};
@@ -89,7 +93,10 @@ async function main() {
       payload = {};
     }
 
-    if (!CREDIT_ERRORS.has(payload.error)) process.exit(0);
+    if (!CREDIT_ERRORS.has(payload.error)) {
+      logMetric("hook:credit-watchdog", "skip", `error=${payload.error || "aucune"}`);
+      process.exit(0);
+    }
 
     const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
     const projectName = path.basename(payload.cwd || projectDir) || "Claude Code";
@@ -112,8 +119,10 @@ async function main() {
         ? `État sauvegardé. Reprise proposée à ${formatTime(resumeAtMs)} (terminal ouvert automatiquement).`
         : `État sauvegardé dans session-log.md. Heure de réinitialisation inconnue — reprise manuelle : claude --resume`
     );
+    logMetric("hook:credit-watchdog", scheduled ? "resume-scheduled" : "checkpoint-only", scheduled ? `reprise=${formatTime(resumeAtMs)}` : "heure inconnue");
     process.exit(0);
   } catch (e) {
+    logMetric("hook:credit-watchdog", "error", String(e).slice(0, 100));
     process.exit(0); // Le sauvetage est best-effort : jamais d'échec bloquant.
   }
 }

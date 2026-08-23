@@ -26,6 +26,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { logMetric } = require("./lib/metrics");
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -105,6 +106,11 @@ async function main() {
   const fh = limitPart("5h", fiveHour);
   if (fh) parts.push(fh);
   process.stdout.write(parts.join(" · "));
+  logMetric(
+    "hook:statusline",
+    "snapshot",
+    `ctx=${contextPct == null ? "?" : contextPct}% 5h=${fiveHour && typeof fiveHour.used_percentage === "number" ? Math.round(fiveHour.used_percentage) : "?"}% 7d=${sevenDay && typeof sevenDay.used_percentage === "number" ? Math.round(sevenDay.used_percentage) : "?"}%`
+  );
   process.exit(0);
 }
 

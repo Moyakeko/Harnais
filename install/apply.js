@@ -28,7 +28,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.8";
+const VERSION = "1.10";
 
 // Marqueurs d'idempotence. Le start porte la version (informatif) mais la
 // détection est tolérante à son changement — sinon une mise à jour ne
@@ -59,7 +59,9 @@ credentials*.json
 .claude/notify-state.json
 # État local des watchdogs (snapshot statusline + flags de seuils)
 .claude/statusline-snapshot.json
-.claude/watchdog-state.json`;
+.claude/watchdog-state.json
+# Télémétrie locale du socle (V1.10) — grossit vite, voulu, voir CLAUDE.md
+.claude/harnais-metrics.jsonl`;
 
 // Bruit par stack — ajouté hors marqueurs, uniquement à la création d'un
 // .gitignore neuf (ensuite c'est au projet de le faire vivre).
@@ -118,6 +120,67 @@ function backupOnce(p) {
   if (!fs.existsSync(bak)) fs.copyFileSync(p, bak);
 }
 
+// Diff ligne-à-ligne (LCS classique, sans dépendance) — affiché AVANT chaque
+// écriture d'un fichier déjà existant, pour que la mise à jour reste
+// transparente sans bloquer sur une confirmation (installeurs utilisables
+// non-interactivement). Purement additif : n'affecte ni l'écriture elle-même,
+// ni les sauvegardes .harnais-bak, ni le résumé final.
+function diffLines(oldText, newText) {
+  const a = oldText.replace(/\r\n/g, "\n").split("\n");
+  const b = newText.replace(/\r\n/g, "\n").split("\n");
+  const n = a.length;
+  const m = b.length;
+  const lcs = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+  const ops = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      ops.push({ t: " ", l: a[i] });
+      i++;
+      j++;
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      ops.push({ t: "-", l: a[i] });
+      i++;
+    } else {
+      ops.push({ t: "+", l: b[j] });
+      j++;
+    }
+  }
+  while (i < n) ops.push({ t: "-", l: a[i++] });
+  while (j < m) ops.push({ t: "+", l: b[j++] });
+  return ops;
+}
+
+const DIFF_CONTEXT = 1;
+
+function printDiff(rel, oldText, newText) {
+  if (sameText(oldText, newText)) return;
+  const ops = diffLines(oldText, newText);
+  const lines = [`--- ${rel} (actuel)`, `+++ ${rel} (nouveau)`];
+  let i = 0;
+  while (i < ops.length) {
+    if (ops[i].t === " ") {
+      i++;
+      continue;
+    }
+    const start = Math.max(0, i - DIFF_CONTEXT);
+    let end = i;
+    while (end < ops.length && ops[end].t !== " ") end++;
+    end = Math.min(ops.length, end + DIFF_CONTEXT);
+    for (let k = start; k < end; k++) lines.push(`${ops[k].t}${ops[k].l}`);
+    lines.push("  …");
+    i = end;
+    while (i < ops.length && ops[i].t === " ") i++;
+  }
+  process.stdout.write(lines.slice(0, -1).join("\n") + "\n\n");
+}
+
 function listFiles(dir) {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -143,6 +206,7 @@ function installOwned(src, dst, rel) {
     report("identique", rel);
     return;
   }
+  printDiff(rel, readText(dst), readText(src));
   backupOnce(dst);
   fs.copyFileSync(src, dst);
   report("remplacé (+.harnais-bak)", rel);
@@ -171,6 +235,7 @@ function mergeMarkedBlock(dst, rel, block, startRe, endMarker, freshExtra) {
     if (sameText(updated, existing)) {
       report("identique", rel);
     } else {
+      printDiff(rel, existing, updated);
       fs.writeFileSync(dst, updated);
       report("mis à jour (bloc harnais)", rel);
     }
@@ -178,9 +243,11 @@ function mergeMarkedBlock(dst, rel, block, startRe, endMarker, freshExtra) {
   }
   // Fichier pré-existant sans bloc socle (autre méthode déjà en place) :
   // on ajoute à la fin, on ne touche à rien d'autre.
-  backupOnce(dst);
   const sep = existing.endsWith("\n") || existing.endsWith("\r\n") ? eol : eol + eol;
-  fs.writeFileSync(dst, existing + sep + withEol(block, eol) + eol);
+  const merged = existing + sep + withEol(block, eol) + eol;
+  printDiff(rel, existing, merged);
+  backupOnce(dst);
+  fs.writeFileSync(dst, merged);
   report("fusionné (bloc ajouté, +.harnais-bak)", rel);
 }
 
@@ -204,6 +271,7 @@ function mergeSettings(srcPath, dstPath) {
     fail(`${rel} du projet n'est pas un JSON valide (${e.message}) — répare-le avant d'installer le socle.`);
   }
   const before = JSON.stringify(existing);
+  const beforePretty = JSON.stringify(existing, null, 2);
 
   // Hooks : append par événement, clé d'idempotence = chaîne `command`.
   existing.hooks = existing.hooks || {};
@@ -245,8 +313,10 @@ function mergeSettings(srcPath, dstPath) {
     report("identique", rel);
     return;
   }
+  const afterPretty = JSON.stringify(existing, null, 2);
+  printDiff(rel, beforePretty, afterPretty);
   backupOnce(dstPath);
-  fs.writeFileSync(dstPath, JSON.stringify(existing, null, 2) + "\n");
+  fs.writeFileSync(dstPath, afterPretty + "\n");
   report("fusionné (+.harnais-bak)", rel);
 }
 

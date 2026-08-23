@@ -113,3 +113,9 @@ Ne construit pas de système de mémoire/apprentissage continu (façon ECC) — 
 choisi de ne pas en avoir en V1. Si ce besoin apparaît un jour, c'est une décision à
 prendre explicitement avec l'utilisateur, pas une conséquence automatique de
 `skill-builder`.
+
+## Télémétrie
+
+En fin de skill, journalise une ligne (best-effort, n'affecte jamais le déroulé si la
+commande échoue) :
+`node .claude/hooks/lib/metrics.js "skill:skill-builder" "builder" "<résumé court>"`

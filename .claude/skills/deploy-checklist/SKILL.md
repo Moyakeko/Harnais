@@ -63,3 +63,9 @@ jamais VPS ou PaaS par défaut.
 Ne choisit pas d'outil d'infra à la place de l'utilisateur (pas de recommandation de
 plateforme par défaut) — le choix de cible reste sien, cette skill vérifie juste que rien
 d'évident n'a été oublié avant de pousser en prod.
+
+## Télémétrie
+
+En fin de skill, journalise une ligne (best-effort, n'affecte jamais le déroulé si la
+commande échoue) :
+`node .claude/hooks/lib/metrics.js "skill:deploy-checklist" "deploy" "<résumé court>"`

@@ -10,6 +10,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { logMetric } = require("./lib/metrics");
 
 const TAIL_LINES = 40;
 
@@ -54,13 +55,16 @@ async function main() {
     tail +
     "\n```\n";
 
+  let written = true;
   try {
     fs.appendFileSync(logFile, entry, "utf8");
   } catch (err) {
     // Filet de sécurité best-effort : une erreur d'écriture ne doit pas
     // empêcher la compaction de se poursuivre.
+    written = false;
   }
 
+  logMetric("hook:precompact-safety-net", written ? "checkpoint-written" : "checkpoint-failed", `déclencheur=${trigger}`);
   process.exit(0);
 }
 

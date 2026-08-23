@@ -22,6 +22,11 @@ credentials*.json
 .claude/statusline-snapshot.json
 .claude/watchdog-state.json
 
+# Télémétrie locale du socle (V1.10, jamais versionnée) — grossit vite,
+# statusline.js journalise à chaque rafraîchissement de la barre de statut :
+# voulu, documenté dans CLAUDE.md/EVOLUTION.md, pas un bug.
+.claude/harnais-metrics.jsonl
+
 # Config Claude Code propre à la machine (pas au socle)
 .claude/settings.local.json
 

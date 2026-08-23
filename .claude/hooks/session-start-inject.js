@@ -12,6 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { logMetric } = require("./lib/metrics");
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -58,6 +59,7 @@ async function main() {
       },
     })
   );
+  logMetric("hook:session-start-inject", "session-start", content ? "SESSION.md injecté" : "SESSION.md absent");
   process.exit(0);
 }
 

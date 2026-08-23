@@ -28,6 +28,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { logMetric } = require("./lib/metrics");
 
 const CONTEXT_THRESHOLD_PCT = 70;
 const CREDIT_THRESHOLD_PCT = 90;
@@ -93,16 +94,21 @@ async function main() {
     if (event === "PostCompact") {
       // Le contexte vient d'être compacté : un futur passage au-dessus du
       // seuil redevient une information neuve.
+      const reset = !!entry.contextWarned;
       if (entry.contextWarned) {
         delete entry.contextWarned;
         entry.ts = now;
         state[sessionId] = entry;
         saveState(stateFile, state);
       }
+      logMetric("hook:context-watchdog", reset ? "postcompact-reset" : "postcompact-noop", `session=${sessionId}`);
       process.exit(0);
     }
 
-    if (event !== "UserPromptSubmit") process.exit(0);
+    if (event !== "UserPromptSubmit") {
+      logMetric("hook:context-watchdog", "skip", `event=${event || "inconnu"}`);
+      process.exit(0);
+    }
 
     const snapshot = loadJson(path.join(projectDir, ".claude", "statusline-snapshot.json"));
     const snapshotValid =
@@ -110,7 +116,10 @@ async function main() {
       snapshot.session_id === payload.session_id &&
       typeof snapshot.ts === "number" &&
       now - snapshot.ts < SNAPSHOT_MAX_AGE_MS;
-    if (!snapshotValid) process.exit(0);
+    if (!snapshotValid) {
+      logMetric("hook:context-watchdog", "skip", "snapshot invalide/absent");
+      process.exit(0);
+    }
 
     const warnings = [];
 
@@ -143,7 +152,10 @@ async function main() {
       );
     }
 
-    if (warnings.length === 0) process.exit(0);
+    if (warnings.length === 0) {
+      logMetric("hook:context-watchdog", "pass", "aucun seuil atteint");
+      process.exit(0);
+    }
 
     entry.ts = now;
     state[sessionId] = entry;
@@ -159,8 +171,11 @@ async function main() {
         },
       })
     );
+    const category = entry.contextWarned && entry.creditWarned ? "context+credit-warn" : entry.contextWarned ? "context-warn" : "credit-warn";
+    logMetric("hook:context-watchdog", category, `ctx=${Math.round(ctx || 0)}% 5h=${Math.round((fiveHour && fiveHour.used_percentage) || 0)}%`);
     process.exit(0);
   } catch (e) {
+    logMetric("hook:context-watchdog", "error", String(e).slice(0, 100));
     process.exit(0); // Jamais bloquant : la surveillance est un confort, pas un garde-fou.
   }
 }
