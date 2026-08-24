@@ -13,7 +13,7 @@
  *     Jamais réarmé seul : seul un /compact manuel (event PostCompact,
  *     encore possible même auto-compact désactivé) ou une nouvelle session
  *     repart propre.
- *   - Crédits 5h ≥ 95% : même blocage, MAIS borné dans le temps plutôt que
+ *   - Crédits 5h ≥ 90% : même blocage, MAIS borné dans le temps plutôt que
  *     permanent — puisque `claude --resume` continue le MÊME session_id,
  *     l'entrée d'état est partagée entre la session bloquée et sa reprise
  *     automatique. Le blocage crédits reste actif tant que l'heure de
@@ -38,7 +38,7 @@
  * (autoResumeActive), le considère terminé (fin normale ou arrêt forcé) et
  * remet à zéro TOUT l'état crédits (creditHardStop, creditResumeScheduled,
  * autoResumeUnblockAt, autoResumeActive, autoResumeActionCount) — un nouveau
- * franchissement à 95% (prochaine fenêtre 5h) repartira propre. Ce flag n'est
+ * franchissement à 90% (prochaine fenêtre 5h) repartira propre. Ce flag n'est
  * JAMAIS posé en usage interactif classique : aucune ambiguïté possible avec
  * une session normale qui termine simplement son tour.
  *
@@ -47,6 +47,20 @@
  *
  * Jamais bloquant sur erreur interne (payload illisible, snapshot absent,
  * état corrompu) : fail-open, comme tous les autres watchdogs de ce socle.
+ *
+ * V1.11 — snapshot périmé (>SNAPSHOT_MAX_AGE_MS, ou d'une autre session) :
+ * avant cette version, ce cas sautait SILENCIEUSEMENT toute détection —
+ * indiscernable d'un cas réellement sain, y compris quand les crédits/le
+ * contexte réels continuaient de grimper pendant une longue rafale d'outils
+ * sans rafraîchissement de la statusline (hors contrôle du socle). Désormais :
+ * la dernière valeur connue est mémorisée à chaque snapshot frais ; si le
+ * snapshot devient périmé alors que cette dernière valeur était déjà en zone
+ * de vigilance (≥75% contexte ou ≥80% crédits), un avertissement est émis
+ * après STALE_STREAK_WARN appels consécutifs sans nouveau relevé, puis un
+ * arrêt dur conservateur après STALE_STREAK_CAP (réutilise le mécanisme
+ * forcedReason déjà existant pour le plafond anti-emballement). Sans base
+ * "en zone de vigilance", aucune escalade sur la seule staleness — une
+ * session simplement peu active ne doit pas être punie.
  */
 
 const fs = require("fs");
@@ -55,11 +69,20 @@ const { scheduleResume, resolveClaudeBin, toEpochMs } = require("./lib/resume-sc
 const { logMetric } = require("./lib/metrics");
 
 const CONTEXT_HARD_STOP_PCT = 85;
-const CREDIT_HARD_STOP_PCT = 95;
+const CREDIT_HARD_STOP_PCT = 90;
 const SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
 const STATE_TTL_MS = 24 * 60 * 60 * 1000;
 const RESUME_DELAY_MS = 60 * 1000;
 const DEFAULT_MAX_ACTIONS = 30;
+
+// V1.11 — fix du fail-open sur snapshot périmé (voir en-tête). Un snapshot
+// périmé n'est dangereux que si la dernière valeur connue était déjà en zone
+// de vigilance ; ces seuils sont volontairement SOUS les seuils durs
+// ci-dessus, pour réagir avant que ce soit critique plutôt qu'après.
+const STALE_ESCALATION_CONTEXT_PCT = 75;
+const STALE_ESCALATION_CREDIT_PCT = 80;
+const STALE_STREAK_WARN = 10; // appels consécutifs sans snapshot frais avant avertissement
+const STALE_STREAK_CAP = 20; // puis arrêt dur conservateur
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -175,16 +198,13 @@ async function main() {
     }
 
     const snapshot = loadJson(path.join(projectDir, ".claude", "statusline-snapshot.json"));
-    const snapshotValid =
-      snapshot &&
-      snapshot.session_id === payload.session_id &&
-      typeof snapshot.ts === "number" &&
-      now - snapshot.ts < SNAPSHOT_MAX_AGE_MS;
+    const sameSessionSnapshot = !!(snapshot && snapshot.session_id === payload.session_id && typeof snapshot.ts === "number");
+    const snapshotFresh = sameSessionSnapshot && now - snapshot.ts < SNAPSHOT_MAX_AGE_MS;
 
     let changed = false;
     let forcedReason = null;
 
-    if (snapshotValid) {
+    if (snapshotFresh) {
       const ctx = snapshot.context_used_percentage;
       if (typeof ctx === "number" && ctx >= CONTEXT_HARD_STOP_PCT && !entry.contextHardStop) {
         entry.contextHardStop = true;
@@ -213,6 +233,34 @@ async function main() {
           }
         }
       }
+
+      // Dernière valeur connue, pour rester prudent si le prochain snapshot
+      // se fait attendre (voir bloc staleness ci-dessous).
+      if (typeof ctx === "number") entry.lastKnownCtx = ctx;
+      if (fiveHour && typeof fiveHour.used_percentage === "number") entry.lastKnownCredit = fiveHour.used_percentage;
+      entry.staleStreak = 0;
+      entry.staleWarned = false;
+      changed = true;
+    } else {
+      // Snapshot absent, d'une autre session, ou périmé (>SNAPSHOT_MAX_AGE_MS)
+      // : avant V1.11 ce cas sautait silencieusement toute détection
+      // (fail-open indiscernable d'un cas sain). On compte désormais les
+      // appels consécutifs dans cet état pour pouvoir escalader si la
+      // dernière valeur connue était déjà préoccupante (voir plus bas).
+      entry.staleStreak = (entry.staleStreak || 0) + 1;
+      changed = true;
+    }
+
+    const lastKnownHigh =
+      (typeof entry.lastKnownCtx === "number" && entry.lastKnownCtx >= STALE_ESCALATION_CONTEXT_PCT) ||
+      (typeof entry.lastKnownCredit === "number" && entry.lastKnownCredit >= STALE_ESCALATION_CREDIT_PCT);
+
+    if (!snapshotFresh && lastKnownHigh && entry.staleStreak >= STALE_STREAK_CAP && !entry.contextHardStop) {
+      entry.contextHardStop = true;
+      forcedReason =
+        `snapshot périmé depuis ${entry.staleStreak} appels alors que la dernière valeur connue était déjà ` +
+        `élevée (contexte ${entry.lastKnownCtx ?? "?"}%, crédits ${entry.lastKnownCredit ?? "?"}%) — arrêt conservateur`;
+      changed = true;
     }
 
     // Phase "reprise" : l'heure planifiée est franchie -> le blocage crédits
@@ -248,7 +296,43 @@ async function main() {
     const creditBlocking = entry.creditHardStop && !inResumeWindow;
     const hardStopActive = entry.contextHardStop || creditBlocking;
     if (!hardStopActive) {
-      logMetric("hook:hard-stop-guard", "pass", "aucun seuil atteint");
+      if (!snapshotFresh && lastKnownHigh && entry.staleStreak >= STALE_STREAK_WARN && !entry.staleWarned) {
+        entry.staleWarned = true;
+        entry.ts = now;
+        state[sessionId] = entry;
+        saveState(stateFile, state);
+        const warnMsg =
+          `⚠️ ORDRE DU HARNAIS (hard-stop-guard) : le snapshot statusline n'a pas été rafraîchi depuis ` +
+          `${entry.staleStreak} outils, alors que la dernière valeur connue était déjà élevée ` +
+          `(contexte ${entry.lastKnownCtx ?? "?"}%, crédits ${entry.lastKnownCredit ?? "?"}%). La détection réelle ` +
+          `est en pause tant qu'un nouveau relevé ne revient pas — fais un point session-checkpoint par précaution.`;
+        // Support de hookSpecificOutput.additionalContext sur PostToolUse non
+        // confirmé (seul UserPromptSubmit l'utilise ailleurs dans ce socle) :
+        // si Claude Code l'ignore, l'écriture stdout est simplement sans effet
+        // (fail-open préservé) et la télémétrie warn-stale reste le filet réel.
+        process.stdout.write(
+          JSON.stringify({
+            continue: true,
+            suppressOutput: true,
+            hookSpecificOutput: {
+              hookEventName: "PostToolUse",
+              additionalContext: warnMsg,
+            },
+          })
+        );
+        logMetric(
+          "hook:hard-stop-guard",
+          "warn-stale",
+          `streak=${entry.staleStreak} ctx=${entry.lastKnownCtx ?? "?"} credit=${entry.lastKnownCredit ?? "?"}`
+        );
+        process.exit(0);
+      }
+
+      const passCategory = snapshotFresh ? "pass-fresh" : "pass-stale";
+      const detail = snapshotFresh
+        ? "aucun seuil atteint"
+        : `snapshot périmé/absent (streak=${entry.staleStreak || 0}), dernière valeur connue ctx=${entry.lastKnownCtx ?? "?"}% 5h=${entry.lastKnownCredit ?? "?"}%`;
+      logMetric("hook:hard-stop-guard", passCategory, detail);
       process.exit(0);
     }
 
@@ -262,10 +346,10 @@ async function main() {
     const reason =
       forcedReason ||
       (entry.contextHardStop && creditBlocking
-        ? "contexte ≥85% et crédits 5h ≥95%"
+        ? `contexte ≥${CONTEXT_HARD_STOP_PCT}% et crédits 5h ≥${CREDIT_HARD_STOP_PCT}%`
         : entry.contextHardStop
-        ? "contexte ≥85%"
-        : "crédits 5h ≥95%");
+        ? `contexte ≥${CONTEXT_HARD_STOP_PCT}%`
+        : `crédits 5h ≥${CREDIT_HARD_STOP_PCT}%`);
 
     process.stderr.write(blockMessage(reason));
     const category = forcedReason ? "block-forced" : entry.contextHardStop && creditBlocking ? "block-both" : entry.contextHardStop ? "block-context" : "block-credits";

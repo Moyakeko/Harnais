@@ -288,3 +288,59 @@ prévisible d'un modèle/tâche à l'autre) ; une reprise headless silencieuse
 (`claude -p`, envisagée puis explicitement écartée par l'utilisateur au profit d'un
 terminal visible) ; un second fichier de hook séparé pour les crédits (dupliquerait
 la logique de blocage/whitelist, déjà identique à celle du contexte).
+
+## Décisions propres — V1.11 (collaboration multi-personnes, recherche, watchdog fiable)
+
+**Contexte** : le socle commence à être utilisé sur des projets avec d'autres personnes.
+L'utilisateur a remonté cinq manques constatés à l'usage (pas depuis une source externe
+étudiée cette fois — décisions propres à ce socle) : pas de découpage en Stories avant de
+coder, pas de réflexe Perplexity natif, aucune vérification de faille de sécurité connue
+avant d'adopter une version de dépendance (ni de garde-fou contre le réflexe "erreur de
+build → je change de paquet" sans vérifier), `deploy-checklist` figée sans recherche
+active d'outils à jour, et surtout un **bug réel découvert à l'usage** dans le watchdog
+crédits/contexte de V1.9.
+
+**Le bug** : `hard-stop-guard.js` (`PostToolUse`) exige un snapshot `statusline.js` de
+moins de 5 minutes pour détecter un franchissement de seuil. Si ce snapshot ne se
+rafraîchit pas (rafale d'outils/sous-agents sans rafraîchissement de l'UI, hors contrôle
+du socle), le hook sautait **silencieusement** toute détection — indiscernable d'un cas
+réellement sain, alors même que les crédits réels continuaient de grimper. C'est
+vraisemblablement la cause de l'impression utilisateur que "ça ne vérifie pas à chaque
+étape", alors que la fréquence de check elle-même (après CHAQUE outil, sans matcher)
+était déjà correcte depuis V1.9.
+
+**Retenu — fix du fail-open** : mémoriser la dernière valeur connue de contexte/crédits
+à chaque snapshot frais, avec un compteur d'appels consécutifs sans rafraîchissement. Si
+le snapshot devient périmé alors que la dernière valeur connue était déjà en zone de
+vigilance (≥75 % contexte ou ≥80 % crédits — volontairement sous les seuils durs, pour
+réagir avant que ce soit critique), un avertissement est émis après 10 appels sans
+nouveau relevé, puis un arrêt dur conservateur après 20 (réutilise le mécanisme
+`forcedReason` déjà existant du plafond anti-emballement, plutôt qu'un nouveau chemin de
+blocage). Sans base "en zone de vigilance", aucune escalade sur la seule staleness — une
+session simplement peu active ne doit pas être punie.
+
+**Retenu — seuils resserrés modérément** : `CREDIT_HARD_STOP_PCT` 95 → 90,
+`CREDIT_THRESHOLD_PCT` (rappel doux) 90 → 85, pour garder un vrai buffer entre rappel et
+arrêt dur (identique à l'écart contexte 70/85, inchangé). Choix délibéré entre les deux
+options extrêmes présentées à l'utilisateur : ni la "sécurité maximale" (seuils ~80/85 %,
+fenêtre de fraîcheur 60-90s) ni le statu quo (85/95 % inchangés) — un compromis qui
+corrige le vrai bug sans sacrifier une part significative de la fenêtre 5h utilisable.
+
+**Retenu — recherche renforcée** : `find-skills` (déjà présente) devient le mécanisme
+d'identification de skills pertinentes par Story (BMAD, `onboard-project`/`dev-cycle`) et
+par stack de déploiement (`deploy-checklist`), plutôt que de figer du contenu qui
+deviendrait vite obsolète. Nouvelle skill `perplexity-research` : documentée comme
+**optionnelle** (l'utilisateur n'a pas de clé API Perplexity au moment de cette décision)
+— jamais un prérequis, jamais de clé en clair (`.mcp.json` avec expansion
+`${PERPLEXITY_API_KEY}`, jamais littérale). Vérification de version de dépendance :
+extension de `security-audit` (pas une nouvelle skill — le domaine y était déjà déclaré)
+via l'API gratuite et sans clé d'OSV.dev, avec une règle explicite anti-swap-aveugle
+(vérifier des versions antérieures du même paquet avant d'envisager un remplacement,
+jamais de substitution silencieuse).
+
+**Écarté** : une 7e règle non négociable dans `CLAUDE.md` pour la vérification de
+dépendances — les 6 règles actuelles sont des invariants universels souvent adossés à un
+hook déterministe, celle-ci est domaine-spécifique (renforcement de la règle 5 existante
++ renvoi croisé depuis `dev-cycle`/`security-audit` à la place). Une skill de déploiement
+générique figée par techno — choix délibéré de recherche dynamique via `find-skills` à
+chaque projet plutôt qu'un contenu qui se périmerait.

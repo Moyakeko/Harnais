@@ -99,7 +99,7 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
   writeSnapshot(dir, { session_id: "s-ctx3", ts: Date.now() - 10 * 60 * 1000, context_used_percentage: 95 });
   check("snapshot périmé (>5 min) => silence", prompt("s-ctx3").stdout === "");
 
-  // Crédits ≥ 90% : avertissement, une seule fois, indépendant du contexte.
+  // Crédits ≥ 85% (V1.11) : avertissement, une seule fois, indépendant du contexte.
   writeSnapshot(dir, {
     session_id: "s-credit", ts: Date.now(), context_used_percentage: 10,
     five_hour: { used_percentage: 92, resets_at: Math.floor(Date.now() / 1000) + 1800 },
@@ -247,7 +247,7 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-// --- hard-stop-guard : arrêt dur crédits (proactif 95%), planification, fenêtre de reprise, plafond ---
+// --- hard-stop-guard : arrêt dur crédits (proactif 90%, V1.11), planification, fenêtre de reprise, plafond ---
 {
   const dir = mkProject();
   const env = { CLAUDE_PROJECT_DIR: dir };
@@ -263,13 +263,13 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
   });
 
   const firstBlock = tool("s-hs-credit", "Bash", { command: "ls" });
-  check("crédits ≥95% => exit 2", firstBlock.status === 2);
-  check("crédits ≥95% => message d'ordre de checkpoint", firstBlock.stderr.includes("SESSION.md"));
+  check("crédits ≥90% => exit 2", firstBlock.status === 2);
+  check("crédits ≥90% => message d'ordre de checkpoint", firstBlock.stderr.includes("SESSION.md"));
   const dry = JSON.parse(firstBlock.stdout);
-  check("crédits ≥95% => planifie la reprise (resumeAt = reset + 60s)", Date.parse(dry.wouldSchedule.resumeAt) === resetSec * 1000 + 60000);
+  check("crédits ≥90% => planifie la reprise (resumeAt = reset + 60s)", Date.parse(dry.wouldSchedule.resumeAt) === resetSec * 1000 + 60000);
 
   const secondBlock = tool("s-hs-credit", "Bash", { command: "ls" });
-  check("crédits ≥95% une 2e fois => bloqué mais pas replanifié (idempotent)", secondBlock.status === 2 && secondBlock.stdout === "");
+  check("crédits ≥90% une 2e fois => bloqué mais pas replanifié (idempotent)", secondBlock.status === 2 && secondBlock.stdout === "");
 
   // Read/Write SESSION.md restent autorisés pendant l'arrêt dur crédits.
   check("Read autorisé pendant hard-stop crédits", tool("s-hs-credit", "Read", { file_path: "x.txt" }).status === 0);
@@ -277,6 +277,140 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
     "Write SESSION.md autorisé pendant hard-stop crédits",
     tool("s-hs-credit", "Write", { file_path: path.join(dir, "SESSION.md") }).status === 0
   );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// --- hard-stop-guard : régression du resserrement de seuil (95% -> 90%, V1.11) ---
+{
+  const dir = mkProject();
+  const env = { CLAUDE_PROJECT_DIR: dir };
+  const tool = (sid) =>
+    run("hard-stop-guard.js", ["PostToolUse"], { session_id: sid, cwd: dir, tool_name: "Bash", tool_input: { command: "ls" } }, env);
+
+  // 91% était SOUS l'ancien seuil (95%) donc serait passé avant V1.11 ; doit
+  // désormais bloquer, preuve que le resserrement a un effet réel.
+  writeSnapshot(dir, {
+    session_id: "s-hs-credit91",
+    ts: Date.now(),
+    context_used_percentage: 10,
+    five_hour: { used_percentage: 91 },
+  });
+  check("crédits 91% (entre l'ancien et le nouveau seuil) => bloque désormais", tool("s-hs-credit91").status === 2);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// --- hard-stop-guard : staleness du snapshot (V1.11) — fail-open corrigé ---
+{
+  const dir = mkProject();
+  const env = { CLAUDE_PROJECT_DIR: dir };
+  const tool = (sid) =>
+    run("hard-stop-guard.js", ["PostToolUse"], { session_id: sid, cwd: dir, tool_name: "Bash", tool_input: { command: "ls" } }, env);
+  const stateFile = path.join(dir, ".claude", "watchdog-state.json");
+  const readState = (sid) => JSON.parse(fs.readFileSync(stateFile, "utf8"))[sid];
+
+  // Snapshot frais sous les seuils d'escalade (75%/80%) : rien de spécial, valeurs mémorisées.
+  writeSnapshot(dir, {
+    session_id: "s-stale-low",
+    ts: Date.now(),
+    context_used_percentage: 60,
+    five_hour: { used_percentage: 40 },
+  });
+  const freshLow = tool("s-stale-low");
+  check("staleness : snapshot frais bas => exit 0", freshLow.status === 0);
+  check("staleness : snapshot frais bas => stdout silencieux", freshLow.stdout === "");
+  const stLow = readState("s-stale-low");
+  check("staleness : dernière valeur contexte mémorisée", stLow.lastKnownCtx === 60);
+  check("staleness : dernière valeur crédits mémorisée", stLow.lastKnownCredit === 40);
+  check("staleness : streak à 0 après un snapshot frais", stLow.staleStreak === 0);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+{
+  const dir = mkProject();
+  const env = { CLAUDE_PROJECT_DIR: dir };
+  const tool = (sid) =>
+    run("hard-stop-guard.js", ["PostToolUse"], { session_id: sid, cwd: dir, tool_name: "Bash", tool_input: { command: "ls" } }, env);
+  const stateFile = path.join(dir, ".claude", "watchdog-state.json");
+  const readState = (sid) => JSON.parse(fs.readFileSync(stateFile, "utf8"))[sid];
+  const snapshotFile = path.join(dir, ".claude", "statusline-snapshot.json");
+  const sid = "s-stale-high";
+
+  // Snapshot frais avec valeur déjà en zone de vigilance (≥75% contexte).
+  writeSnapshot(dir, { session_id: sid, ts: Date.now(), context_used_percentage: 80 });
+  check("staleness haute : premier appel frais => exit 0", tool(sid).status === 0);
+
+  // Le snapshot ne se rafraîchit plus (simule une rafale d'outils sans refresh statusline).
+  fs.rmSync(snapshotFile, { force: true });
+
+  let lastRes;
+  for (let i = 0; i < 9; i++) lastRes = tool(sid); // streak 1..9, sous STALE_STREAK_WARN (10)
+  check("staleness haute : sous le seuil d'avertissement => exit 0 silencieux", lastRes.status === 0 && lastRes.stdout === "");
+  check("staleness haute : streak correctement compté", readState(sid).staleStreak === 9);
+
+  const warnRes = tool(sid); // streak=10 => STALE_STREAK_WARN atteint
+  check("staleness haute : avertissement au 10e appel périmé => exit 0", warnRes.status === 0);
+  check("staleness haute : avertissement mentionne le snapshot non rafraîchi", warnRes.stdout.includes("rafraîchi"));
+  check("staleness haute : avertissement mentionne la dernière valeur (80%)", warnRes.stdout.includes("80"));
+
+  const noReWarn = tool(sid); // streak=11 : déjà averti, pas de re-déclenchement
+  check("staleness haute : avertissement une seule fois (pas de re-déclenchement)", noReWarn.stdout === "");
+
+  for (let i = 0; i < 8; i++) lastRes = tool(sid); // streak 12..19, toujours sous STALE_STREAK_CAP (20)
+  check("staleness haute : toujours sous le plafond => exit 0", lastRes.status === 0);
+
+  const capRes = tool(sid); // streak=20 => STALE_STREAK_CAP atteint
+  check("staleness haute : plafond atteint => exit 2 (arrêt conservateur)", capRes.status === 2);
+  check("staleness haute : message mentionne 'périmé'", capRes.stderr.includes("périmé"));
+  check("staleness haute : message mentionne 'arrêt conservateur'", capRes.stderr.includes("arrêt conservateur"));
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+{
+  const dir = mkProject();
+  const env = { CLAUDE_PROJECT_DIR: dir };
+  const tool = (sid) =>
+    run("hard-stop-guard.js", ["PostToolUse"], { session_id: sid, cwd: dir, tool_name: "Bash", tool_input: { command: "ls" } }, env);
+  const snapshotFile = path.join(dir, ".claude", "statusline-snapshot.json");
+  const sid = "s-stale-lowvalue";
+
+  // Dernière valeur connue BASSE : même après beaucoup d'appels périmés, pas
+  // d'escalade — une session simplement peu active ne doit pas être punie.
+  writeSnapshot(dir, { session_id: sid, ts: Date.now(), context_used_percentage: 20, five_hour: { used_percentage: 10 } });
+  tool(sid);
+  fs.rmSync(snapshotFile, { force: true });
+
+  let lastRes;
+  for (let i = 0; i < 25; i++) lastRes = tool(sid); // bien au-delà de STALE_STREAK_CAP (20)
+  check("staleness sans base élevée : aucune escalade même au-delà du plafond", lastRes.status === 0);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+{
+  const dir = mkProject();
+  const env = { CLAUDE_PROJECT_DIR: dir };
+  const tool = (sid) =>
+    run("hard-stop-guard.js", ["PostToolUse"], { session_id: sid, cwd: dir, tool_name: "Bash", tool_input: { command: "ls" } }, env);
+  const stateFile = path.join(dir, ".claude", "watchdog-state.json");
+  const readState = (sid) => JSON.parse(fs.readFileSync(stateFile, "utf8"))[sid];
+  const snapshotFile = path.join(dir, ".claude", "statusline-snapshot.json");
+  const sid = "s-stale-reset";
+
+  // Une série de staleness, puis un retour de snapshot frais => le compteur retombe à 0.
+  writeSnapshot(dir, { session_id: sid, ts: Date.now(), context_used_percentage: 80 });
+  tool(sid);
+  fs.rmSync(snapshotFile, { force: true });
+  for (let i = 0; i < 5; i++) tool(sid);
+  check("staleness : streak accumulé avant retour du snapshot", readState(sid).staleStreak === 5);
+
+  writeSnapshot(dir, { session_id: sid, ts: Date.now(), context_used_percentage: 55 });
+  tool(sid);
+  const afterFresh = readState(sid);
+  check("staleness : retour d'un snapshot frais => streak réinitialisé", afterFresh.staleStreak === 0);
+  check("staleness : retour d'un snapshot frais => staleWarned réinitialisé", afterFresh.staleWarned === false);
 
   fs.rmSync(dir, { recursive: true, force: true });
 }

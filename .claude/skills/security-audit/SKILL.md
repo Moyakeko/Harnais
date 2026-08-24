@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: Lightweight pre-commit/pre-deploy security routine — scans for hardcoded secrets, checks .gitignore hygiene, and flags dependency risk. Triggers on "avant de commit", "audit de sécurité", "security-audit", "vérifie les secrets", or before deploy-checklist. Defers to /security-review for deep OWASP-style analysis — this skill does not duplicate it.
+description: Lightweight pre-commit/pre-deploy security routine — scans for hardcoded secrets, checks .gitignore hygiene, and checks dependency versions against known vulnerabilities. Triggers on "avant de commit", "audit de sécurité", "security-audit", "vérifie les secrets", before deploy-checklist, or before adding/upgrading/replacing a dependency (new package, version bump, swap after a build error). Defers to /security-review for deep OWASP-style analysis — this skill does not duplicate it.
 ---
 
 # security-audit
@@ -29,16 +29,40 @@ Vérifie que `.gitignore` couvre bien : `.env`, `.env.*` (sauf `.env.example`), 
 dossiers de dépendances (`node_modules`, `venv`, `__pycache__`, `target`, `vendor` selon
 la stack détectée), et les fichiers de build/credentials locaux.
 
-## 3. Hygiène des dépendances (opportuniste, pas bloquant)
+## 3. Vérification de version avant ajout/changement de dépendance
 
-Selon le manifeste présent dans le repo, suggère (sans l'exécuter automatiquement sans
-accord) l'outil d'audit correspondant :
-- `package.json` → `npm audit`
-- `requirements.txt`/`pyproject.toml` → `pip-audit`
-- `Cargo.toml` → `cargo audit`
-- `go.mod` → `govulncheck`
+Systématique (pas juste suggérée) pour toute dépendance **nouvellement ajoutée ou dont la
+version change** — nouvelle lib, montée de version, ou changement de paquet suite à une
+erreur de build : interroge OSV.dev pour la version exacte visée avant de committer le
+choix.
 
-Ne bloque pas la tâche en cours pour ça — c'est une checklist, pas un gate.
+```
+POST https://api.osv.dev/v1/query
+{"package": {"name": "<nom>", "ecosystem": "<npm|PyPI|Go|Maven|RubyGems|crates.io|NuGet|Packagist>"}, "version": "<version exacte>"}
+```
+
+Gratuit, sans clé API (WebFetch/curl direct). La réponse liste les vulnérabilités connues
+(CVE, sévérité, ranges affectés) pour cette version précise — signale tout ce qui matche
+à l'utilisateur avant de continuer, ne corrige jamais silencieusement en changeant encore
+de version sans le dire.
+
+**Règle anti-swap aveugle** — le réflexe "erreur de build → je change de paquet" sans
+vérifier est une source réelle de compromissions supply-chain :
+1. Une erreur de build sur une dépendance **existante** fait d'abord vérifier des
+   versions antérieures **du même paquet** (via OSV.dev pour chacune envisagée) avant
+   d'envisager un paquet de remplacement complètement différent.
+2. Un remplacement de paquet (nom différent) est un dernier recours, **toujours signalé
+   explicitement** à l'utilisateur — jamais une substitution silencieuse.
+3. Tout paquet de remplacement repasse par OSV.dev **et** par le contrôle "dépendance
+   hallucinée/typosquattée" de la section 4 ci-dessous — un remplacement improvisé sous
+   pression d'une erreur est exactement le scénario à risque de slopsquatting.
+4. En cas de doute persistant au-delà d'OSV.dev (compromission très récente pas encore
+   répertoriée), la skill `perplexity-research` peut compléter — jamais un prérequis.
+
+Pour un audit complet du repo (pas juste la dépendance en cours), l'outil correspondant
+au manifeste reste une suggestion opportuniste, pas un gate : `npm audit` (`package.json`),
+`pip-audit` (`requirements.txt`/`pyproject.toml`), `cargo audit` (`Cargo.toml`),
+`govulncheck` (`go.mod`).
 
 ## 4. Pièges typiques du code généré par IA
 

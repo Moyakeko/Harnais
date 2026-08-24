@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Lancé par la tâche planifiée créée par credit-watchdog.js (réactif) ou
- * hard-stop-guard.js (proactif, seuil 95%), à l'heure de réinitialisation des
+ * hard-stop-guard.js (proactif, seuil 90%), à l'heure de réinitialisation des
  * crédits + 1 min. Reprise AUTOMATIQUE supervisée (choix explicitement inversé
  * par l'utilisateur par rapport au comportement purement semi-automatique
  * retenu jusqu'ici — voir SOURCES.md) :

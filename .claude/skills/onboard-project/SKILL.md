@@ -39,11 +39,17 @@ reposer les questions.
 4. Écris un `PROJECT.md` court à la racine (10-20 lignes, pas plus) avec ces réponses.
    Ne duplique pas ce que `CLAUDE.md` couvre déjà (les règles non négociables restent
    dans `CLAUDE.md`, pas ici).
-5. Propose un smoke test du socle fraîchement installé :
+5. Si l'interview a fait émerger plusieurs fonctionnalités distinctes, découpe-les en
+   Stories (format et critère de déclenchement dans
+   `references/bmad-story.md`) et ajoute-les dans une section `## Backlog (Stories)` **à
+   la fin de `PROJECT.md`** (pas de fichier séparé — un seul fichier suffit, voir "Ce que
+   cette skill ne fait pas"). Pour chaque Story, un appel `find-skills` en mode recherche
+   pour repérer les skills candidates avant de coder.
+6. Propose un smoke test du socle fraîchement installé :
    `node .claude/hooks/tests/test-guard.js` — doit afficher N/N tests OK. C'est le
    smoke test décrit dans `EVOLUTION.md` ; deux minutes, et on sait que la couche de
    garde tient sur ce projet et cette machine.
-6. Explique en une phrase à l'utilisateur ce que ça change concrètement pour la suite
+7. Explique en une phrase à l'utilisateur ce que ça change concrètement pour la suite
    (ex: "comme c'est noté avec une deadline, je vais éviter les refactors non demandés
    et prioriser un code qui marche et qui respecte l'énoncé").
 

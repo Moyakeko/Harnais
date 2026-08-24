@@ -13,8 +13,8 @@
  *   - Contexte ≥ 70% : injecte comme contexte additionnel l'ordre d'exécuter
  *     la skill session-checkpoint AVANT de traiter le message courant — un
  *     rappel précoce avant que hard-stop-guard.js ne bloque à 85%.
- *   - Crédits 5h ≥ 90% : même mécanisme, simple avertissement pour
- *     checkpointer avant l'arrêt dur crédits (hard-stop-guard.js à 95%).
+ *   - Crédits 5h ≥ 85% : même mécanisme, simple avertissement pour
+ *     checkpointer avant l'arrêt dur crédits (hard-stop-guard.js à 90%, V1.11).
  *
  * Chaque seuil n'est signalé qu'UNE fois par session (flags dans
  * .claude/watchdog-state.json) pour ne pas polluer chaque prompt ; le flag
@@ -31,7 +31,7 @@ const path = require("path");
 const { logMetric } = require("./lib/metrics");
 
 const CONTEXT_THRESHOLD_PCT = 70;
-const CREDIT_THRESHOLD_PCT = 90;
+const CREDIT_THRESHOLD_PCT = 85;
 const SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
 const STATE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -147,7 +147,7 @@ async function main() {
       warnings.push(
         `⚠️ Avertissement du harnais : ${Math.round(fiveHour.used_percentage)}% des crédits 5h sont ` +
           `consommés${reset ? ` (réinitialisation à ${reset})` : ""}. Fais un point session-checkpoint ` +
-          `dès la prochaine étape franchie ; à 95% hard-stop-guard.js bloquera et planifiera une ` +
+          `dès la prochaine étape franchie ; à 90% hard-stop-guard.js bloquera et planifiera une ` +
           `reprise automatique à la réinitialisation.`
       );
     }

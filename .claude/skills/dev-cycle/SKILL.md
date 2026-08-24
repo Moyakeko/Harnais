@@ -23,6 +23,13 @@ code nouveau là où du code réutilisable existe déjà.
 
 ## 2. Plan
 
+Si la demande couvre plusieurs interactions/écrans distincts, découpe d'abord en Stories
+BMAD-style (même référence que `onboard-project` :
+`.claude/skills/onboard-project/references/bmad-story.md` — ne duplique pas le format
+ici) et fais un appel `find-skills` par nouvelle Story avant de coder. Pour un correctif
+ciblé sur une seule interaction, saute cette sous-étape et continue directement
+ci-dessous.
+
 Formule explicitement (à voix haute pour l'utilisateur, pas juste en interne) :
 - L'approche retenue et pourquoi (pas juste "je vais faire X", mais "je fais X plutôt que
   Y parce que Z").
@@ -37,6 +44,11 @@ Formule explicitement (à voix haute pour l'utilisateur, pas juste en interne) :
 Changement chirurgical : ne touche que le code directement lié à la tâche. Respecte le
 style existant du fichier plutôt que d'imposer tes conventions. N'ajoute pas de gestion
 d'erreur, d'abstraction ou de feature non demandée — même si "ce serait plus propre".
+
+Si le changement ajoute, monte de version, ou remplace une dépendance : applique la
+vérification de version et la règle anti-swap aveugle de `security-audit` (section
+"Vérification de version avant ajout/changement de dépendance") avant de committer le
+choix.
 
 ## 4. Test
 

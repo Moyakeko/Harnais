@@ -28,7 +28,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.10";
+const VERSION = "1.11";
 
 // Marqueurs d'idempotence. Le start porte la version (informatif) mais la
 // détection est tolérante à son changement — sinon une mise à jour ne

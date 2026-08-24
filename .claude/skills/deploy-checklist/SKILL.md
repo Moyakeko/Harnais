@@ -21,7 +21,28 @@ jamais VPS ou PaaS par défaut.
 - Le service manipule-t-il des secrets, une base de données, ou des données
   personnelles de proches ?
 
-## 2. Checklist — avant de déployer
+## 2. Recherche ciblée avant la checklist (find-skills + web si besoin)
+
+Avant de dérouler la checklist, prends le temps d'aller dans le détail plutôt que de te
+précipiter :
+
+1. Identifie précisément la stack de déploiement réelle (langage, framework, base de
+   données, provider) depuis `PROJECT.md`/le repo — jamais une supposition générique.
+2. Appelle `find-skills` avec une requête ciblée sur cette stack précise (ex:
+   "déploiement Fly.io Node Postgres") pour repérer une skill existante pertinente.
+   Présente les candidats trouvés ; n'installe qu'après accord explicite de
+   l'utilisateur (comportement standard de `find-skills`, inchangé).
+3. Si rien de pertinent, ou en cas de doute sur l'actualité d'un outil/MCP pour ce
+   provider : recherche web ciblée (`WebSearch` natif, ou `perplexity-research` si
+   configuré) — ne réponds pas de mémoire sur un écosystème qui évolue vite.
+4. Résume ce qui a été trouvé (ou "rien de spécifique, checklist générique seule") avant
+   de continuer avec la checklist ci-dessous.
+
+Choix délibéré : cette skill ne construit pas de checklist de déploiement figée par
+techno — la recherche se refait dynamiquement à chaque projet plutôt que de figer un
+contenu qui deviendrait vite obsolète.
+
+## 3. Checklist — avant de déployer
 
 - [ ] Build/compilation passe sans erreur.
 - [ ] Tests passent (via `/verify` si pas déjà fait dans le cycle de dev).
@@ -51,7 +72,7 @@ jamais VPS ou PaaS par défaut.
       vérifier ni les exécuter — les rappeler, puis le croire sur parole) : 2FA activée
       sur le compte GitHub/GitLab et sur le compte de la plateforme de déploiement.
 
-## 3. Checklist — après déploiement
+## 4. Checklist — après déploiement
 
 - [ ] Vérifier que le service répond réellement (pas juste "le déploiement a réussi" côté
       plateforme — ouvrir l'URL / taper la commande de santé).
@@ -62,7 +83,9 @@ jamais VPS ou PaaS par défaut.
 
 Ne choisit pas d'outil d'infra à la place de l'utilisateur (pas de recommandation de
 plateforme par défaut) — le choix de cible reste sien, cette skill vérifie juste que rien
-d'évident n'a été oublié avant de pousser en prod.
+d'évident n'a été oublié avant de pousser en prod. Ne construit pas non plus de skill de
+déploiement générique figée par techno (voir section 2) — la recherche se refait à chaque
+projet.
 
 ## Télémétrie
 

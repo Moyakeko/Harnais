@@ -46,7 +46,10 @@ permission actif.
 
 5. **Principes Karpathy (réflexion avant exécution) :**
    - Ne devine jamais silencieusement une hypothèse ambiguë — formule-la à voix haute et
-     pose la question si le doute change l'implémentation.
+     pose la question si le doute change l'implémentation. Un changement de dépendance
+     (nouveau paquet, remplacement suite à une erreur de build) fait partie de ces choix
+     à justifier explicitement, jamais un swap silencieux — voir la skill
+     `security-audit` pour la vérification à faire avant.
    - N'ajoute rien au-delà de ce qui est demandé : pas d'abstraction, de feature ou de
      gestion d'erreur spéculative pour un cas qui ne peut pas se produire.
    - Change chirurgicalement : ne touche que le code directement lié à la tâche, respecte
@@ -64,16 +67,17 @@ permission actif.
 
 | Skill | Quand |
 |---|---|
-| `onboard-project` | Une fois, au tout début d'un nouveau projet posé sur ce socle. |
-| `dev-cycle` | Pour toute fonctionnalité/bug non trivial : explore → plan → code → test → review. |
-| `security-audit` | Avant un commit/PR ou un déploiement — routine légère (secrets, hygiène repo). |
+| `onboard-project` | Une fois, au tout début d'un nouveau projet posé sur ce socle — si plusieurs fonctionnalités émergent, découpage en Stories BMAD + `find-skills` par Story. |
+| `dev-cycle` | Pour toute fonctionnalité/bug non trivial : explore → plan → code → test → review. Même découpage en Stories que `onboard-project` si la demande couvre plusieurs écrans. |
+| `security-audit` | Avant un commit/PR/déploiement, ou avant d'ajouter/monter/remplacer une dépendance — secrets, hygiène repo, vérification CVE de version (OSV.dev) et anti-swap aveugle. |
 | `sandbox-pretest` | Avant un premier déploiement, une dépendance nouvelle, ou l'exécution de code de provenance incertaine — exécution en environnement isolé (Docker si dispo). |
-| `deploy-checklist` | Avant de déployer ou mettre à jour un service réel. |
+| `deploy-checklist` | Avant de déployer ou mettre à jour un service réel — recherche `find-skills` ciblée sur la stack réelle avant la checklist. |
 | `skill-builder` | Pour créer une nouvelle skill du socle, ou dériver une version plus légère (ex: un socle "études uniquement"). |
 | `session-checkpoint` | Après une étape significative, avant une pause connue, ou sur "fais le point" — met à jour `SESSION.md`. |
 | `update-harnais` | Sur "mets à jour le harnais" — récupère la dernière version du socle sur un projet qui l'a déjà (additif, ne touche jamais `SESSION.md`). |
 | `find-skills` | Quand l'utilisateur cherche une skill existante pour une capacité qu'il n'a pas ("y a-t-il une skill pour X ?") — découverte/installation depuis l'écosystème `npx skills`, externe au socle. |
 | `harnais-report` | Sur "rapport d'usage"/"stats du harnais" — agrège `.claude/harnais-metrics.jsonl` en un résumé lisible (hooks/skills les plus invoqués, ratio block/allow, arrêts durs). |
+| `perplexity-research` | Recherche approfondie/sourcée optionnelle (MCP Perplexity) — complément de `WebSearch` natif, jamais un prérequis, jamais de clé en clair. |
 
 Skills globales déjà disponibles dans le harnais Claude Code (ne pas dupliquer) :
 `/verify` (vérification end-to-end d'un changement), `/code-review` (revue du diff
@@ -139,7 +143,8 @@ s'appuient dessus plutôt que de réinventer leur logique.
     bloquera à chaque tentative. Ce blocage n'est jamais réarmé seul : seul un
     `/compact` manuel ou une nouvelle session repart propre.
 - Le même `hard-stop-guard.js` applique un arrêt dur analogue aux crédits de la fenêtre
-  5h, à 95 % (en plus du rappel doux de `context-watchdog.js` à 90 %) : il planifie une
+  5h, à 90 % (en plus du rappel doux de `context-watchdog.js` à 85 %, seuils resserrés en
+  V1.11 — voir plus bas pour le fix associé du fail-open sur snapshot périmé) : il planifie une
   **reprise automatique** à la réinitialisation — `resume-after-reset.js` ouvre alors
   lui-même un terminal visible avec `claude --resume <session>` et une instruction de
   continuation injectée (bornée à la tâche en cours, section "En cours / bloqué" de
@@ -152,6 +157,14 @@ s'appuient dessus plutôt que de réinventer leur logique.
   sans avoir été anticipée) reste en place en complément, avec la même logique de
   planification/reprise (factorisée dans `.claude/hooks/lib/resume-scheduler.js`,
   partagée avec le chemin proactif de `hard-stop-guard.js`).
+- **V1.11 — fail-open corrigé sur snapshot périmé.** Avant cette version, si le snapshot
+  statusline n'était pas rafraîchi depuis plus de 5 minutes (rafale d'outils sans
+  rafraîchissement de l'UI, hors contrôle du socle), `hard-stop-guard.js` sautait
+  silencieusement toute détection — indiscernable d'un cas réellement sain. Désormais, si
+  la dernière valeur connue était déjà en zone de vigilance (≥75 % contexte ou ≥80 %
+  crédits), un avertissement est émis après 10 outils consécutifs sans nouveau relevé,
+  puis un arrêt dur conservateur après 20 — sans base "en zone de vigilance", aucune
+  escalade sur la seule staleness (une session peu active n'est pas punie).
 - La skill `update-harnais` télécharge `install.ps1`/`install.sh` dans un fichier puis
   l'exécute directement (deux étapes séparées, jamais pipées) — ce n'est pas un
   contournement du hook de garde, c'est précisément le mécanisme que ce même CLAUDE.md
@@ -168,7 +181,7 @@ s'appuient dessus plutôt que de réinventer leur logique.
 ## Ce qui est volontairement absent (pour l'instant)
 
 Pas de système de mémoire/apprentissage continu façon ECC, pas de couche sécurité
-multi-agents, pas de règles par langage séparées. Le socle reste à 10 skills + 2 agents +
+multi-agents, pas de règles par langage séparées. Le socle reste à 11 skills + 2 agents +
 8 hooks (+ 1 statusline) par choix délibéré — à faire évoluer via `skill-builder` si le
 besoin s'en fait sentir, pas par défaut. Pour toute évolution du socle lui-même (scripts
 d'auto-amélioration, adaptation à un autre modèle, durcissement entreprise, futur
