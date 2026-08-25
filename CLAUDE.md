@@ -74,10 +74,14 @@ permission actif.
 | `deploy-checklist` | Avant de déployer ou mettre à jour un service réel — recherche `find-skills` ciblée sur la stack réelle avant la checklist. |
 | `skill-builder` | Pour créer une nouvelle skill du socle, ou dériver une version plus légère (ex: un socle "études uniquement"). |
 | `session-checkpoint` | Après une étape significative, avant une pause connue, ou sur "fais le point" — met à jour `SESSION.md`. |
-| `update-harnais` | Sur "mets à jour le harnais" — récupère la dernière version du socle sur un projet qui l'a déjà (additif, ne touche jamais `SESSION.md`). |
+| `checkpoint-pause` | Arrêt manuel d'urgence (`/checkpoint-pause`) — capture vite "En cours / bloqué" dans `SESSION.md` et s'arrête, sans finir la tâche en cours. Ne peut pas interrompre elle-même une action : Échap/Ctrl+C d'abord si Claude est en plein milieu d'un outil. |
+| `checkpoint-resume` | Reprise explicite (`/checkpoint-resume`) — relit "En cours / bloqué" et reprend directement, même en cours de session, sans redemander où on en était. |
+| `update-harnais` | Sur "mets à jour le harnais" — récupère la dernière version du socle sur un projet qui l'a déjà (additif, ne touche jamais `SESSION.md`). Peut aussi être proposée automatiquement en début de session par le hook `update-check.js` (V1.12) quand une version plus récente est publiée — le hook ne fait qu'informer, jamais lancer la mise à jour lui-même. |
 | `find-skills` | Quand l'utilisateur cherche une skill existante pour une capacité qu'il n'a pas ("y a-t-il une skill pour X ?") — découverte/installation depuis l'écosystème `npx skills`, externe au socle. |
 | `harnais-report` | Sur "rapport d'usage"/"stats du harnais" — agrège `.claude/harnais-metrics.jsonl` en un résumé lisible (hooks/skills les plus invoqués, ratio block/allow, arrêts durs). |
+| `harnais-stats` | Sur "stats du projet"/fin d'étape significative — met à jour `STATS.md` (usage/pertinence/problèmes des skills sur ce projet, comparable entre projets), toujours avec l'accord explicite de l'utilisateur avant d'écrire. |
 | `perplexity-research` | Recherche approfondie/sourcée optionnelle (MCP Perplexity) — complément de `WebSearch` natif, jamais un prérequis, jamais de clé en clair. |
+| `graphify` | Cartographier l'architecture d'un gros repo inconnu via un graphe de connaissances (outil tiers Graphify-Labs, CLI `graphify`/PyPI `graphifyy`) — optionnelle, passe par `security-audit` + `sandbox-pretest` avant toute première installation (plusieurs dépôts tiers portent ce même nom). |
 
 Skills globales déjà disponibles dans le harnais Claude Code (ne pas dupliquer) :
 `/verify` (vérification end-to-end d'un changement), `/code-review` (revue du diff
@@ -177,13 +181,26 @@ s'appuient dessus plutôt que de réinventer leur logique.
   skill tierce. La vigilance normale s'applique : c'est du code non fiable par défaut,
   vérifie la réputation de la source avant d'installer (voir la skill elle-même), et
   `sandbox-pretest` reste l'outil si le doute persiste après coup.
+- La skill `graphify` (V1.12) illustre concrètement ce risque : "graphify" recouvre
+  plusieurs dépôts GitHub distincts sous des noms quasi identiques (voir la skill pour la
+  liste) — un nom de projet populaire très cloné n'est pas un cas rare. Vérifie toujours
+  la source exacte (dépôt + registre de paquet) avant d'installer, pas seulement le nom.
+- Le hook `update-check.js` (V1.12, `SessionStart`) est le seul hook du socle qui fait un
+  appel réseau (API GitHub, anonyme, throttlé à 1×/24h par projet) — c'est volontaire :
+  il ne fait qu'informer (message dans le contexte si une version plus récente est
+  publiée), jamais appliquer de mise à jour lui-même. Fail-open systématique (absence de
+  `.claude/harnais.version`, timeout, erreur réseau → silence complet) ; ce dépôt (le
+  socle source) n'a pas ce fichier et n'est donc jamais concerné par ce hook.
 
 ## Ce qui est volontairement absent (pour l'instant)
 
 Pas de système de mémoire/apprentissage continu façon ECC, pas de couche sécurité
-multi-agents, pas de règles par langage séparées. Le socle reste à 11 skills + 2 agents +
-8 hooks (+ 1 statusline) par choix délibéré — à faire évoluer via `skill-builder` si le
-besoin s'en fait sentir, pas par défaut. Pour toute évolution du socle lui-même (scripts
-d'auto-amélioration, adaptation à un autre modèle, durcissement entreprise, futur
-mécanisme de checkpoint/rollback) : lis `EVOLUTION.md` d'abord — il fixe les invariants
-qu'aucune évolution ne doit affaiblir.
+multi-agents, pas de règles par langage séparées. Le socle reste à 15 skills (11→15 en
+V1.12 : `graphify`, `harnais-stats`, `checkpoint-pause`, `checkpoint-resume`, toutes
+ajoutées sur demande explicite de l'utilisateur via `skill-builder`, pas une dérive
+automatique) + 2 agents + 9 hooks (+ 1 statusline, `update-check.js` ajouté en V1.12)
+par choix délibéré — à faire évoluer via `skill-builder` si le besoin s'en fait sentir,
+pas par défaut. Pour toute évolution du
+socle lui-même (scripts d'auto-amélioration, adaptation à un autre modèle, durcissement
+entreprise, futur mécanisme de checkpoint/rollback) : lis `EVOLUTION.md` d'abord — il
+fixe les invariants qu'aucune évolution ne doit affaiblir.

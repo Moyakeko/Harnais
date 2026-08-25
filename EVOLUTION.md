@@ -32,7 +32,10 @@ sur un autre modèle, ou le durcir pour un usage entreprise. Complète `SOURCES.
    script exécutable ajouté.
 4. Documenter : entrée datée dans `.claude/session-log.md` (avec session ID), décision
    de conception dans `SOURCES.md` si le "pourquoi" n'est pas évident, `SESSION.md` via
-   `session-checkpoint`.
+   `session-checkpoint`, **et `README.md`** (bandeau de version, comptes skills/hooks,
+   sections concernées) si le changement touche à l'usage visible du socle — un README
+   qui dérive de la version réelle du socle est un problème constaté (V1.12), pas
+   seulement théorique.
 5. Commit git avec un message qui dit le pourquoi.
 
 ## Couche distribution — les installeurs font partie du socle

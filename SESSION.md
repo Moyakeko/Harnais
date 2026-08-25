@@ -9,89 +9,87 @@
 
 ## Niveau / statut actuel
 
-**V1.11 TERMINÉE — prête à commit/tag, en attente de confirmation utilisateur.** Cinq
-chantiers demandés par l'utilisateur pour préparer le socle à un usage multi-personnes,
-tous faits et vérifiés (détail dans "Fait" ci-dessous) : (A) découpage BMAD en Stories +
-`find-skills` par Story (`onboard-project` + `dev-cycle`) ; (B) skill `perplexity-research`
-optionnelle (MCP Perplexity, jamais de clé en clair) ; (C) `security-audit` étendue avec
-vérification de version via OSV.dev + règle anti-swap-aveugle de dépendance ; (D)
-`deploy-checklist` pilotée par une recherche `find-skills` ciblée sur la stack réelle
-plutôt qu'une checklist figée ; (E) fix d'un vrai bug du watchdog crédits/contexte
-(fail-open silencieux sur snapshot périmé) + seuils crédits resserrés (95→90% arrêt dur,
-90→85% rappel doux).
+**V1.12 complète et vérifiée, pas encore commitée/poussée.** Cinq chantiers dans la
+même version (rien n'a encore été tagué, donc tout reste V1.12) : (1) skill `graphify`,
+(2) vérification automatique de mise à jour au démarrage de session, (3) `STATS.md` par
+projet + skill `harnais-stats`, (4) rattrapage complet de la documentation utilisateur
+(`README.md` était resté à V1.8), (5) `checkpoint-pause`/`checkpoint-resume` (arrêt
+manuel + reprise explicite, sans perte de contexte, y compris entre sessions).
 
-Sous ce chantier V1.11 : V1.10 (télémétrie, versionnage par tag, `find-skills`, fix deny
-`.env.example`) et V1.9 (arrêt dur contexte/crédits) restent stables et commités.
+Sous ce chantier : V1.11 (BMAD Stories, Perplexity optionnelle, vérification CVE de
+dépendance, déploiement piloté par find-skills, fix watchdog) reste stable, commitée
+(`6ba4bd7`), taguée (`v1.11`) et poussée.
 
 ## Fait
 
-- **Chantier E (watchdog)** : `hard-stop-guard.js` — le bug réel (snapshot périmé >5min
-  → détection sautée silencieusement, indiscernable d'un cas sain) est corrigé : mémorise
-  la dernière valeur connue + un compteur `staleStreak`, avertit après 10 appels sans
-  rafraîchissement si la dernière valeur était déjà en zone de vigilance (≥75%
-  contexte/≥80% crédits), arrête par précaution après 20 (réutilise `forcedReason`
-  existant). Seuils resserrés : `CREDIT_HARD_STOP_PCT` 95→90, `CREDIT_THRESHOLD_PCT`
-  (`context-watchdog.js`) 90→85. Commentaires à jour dans `credit-watchdog.js`,
-  `resume-after-reset.js`, `lib/resume-scheduler.js`. **Vérifié** : `test-watchdogs.js`
-  102→123/123 (21 nouveaux tests : régression du resserrement + 5 scénarios de
-  staleness), `test-guard.js`/`test-notify.js`/`test-metrics.js`/`test-settings-deny.js`
-  inchangés (138/32/61/30), syntaxe des 5 hooks touchés vérifiée (`node -c`).
-- **Chantier B (perplexity-research)** : nouvelle skill (11e), MCP officiel documenté
-  (`claude mcp add perplexity --env PERPLEXITY_API_KEY="${PERPLEXITY_API_KEY}" -- npx -y
-  @perplexity-ai/mcp-server`), gabarit `references/mcp-template.json` avec expansion
-  `${VAR}` (jamais de clé en dur), toujours optionnelle (bascule `WebSearch` natif si non
-  configuré, cas réel actuel de l'utilisateur qui n'a pas encore de clé).
-- **Chantier C (security-audit)** : section "Vérification de version avant ajout/
-  changement de dépendance" — appel systématique à l'API OSV.dev (gratuite, sans clé)
-  avant tout ajout/montée/remplacement de dépendance, règle anti-swap-aveugle en 4 points
-  (versions antérieures du même paquet d'abord, remplacement toujours signalé, repasse
-  par OSV.dev + contrôle typosquatting existant, `perplexity-research` en complément si
-  doute persistant). **Vérifié en conditions réelles** : requête OSV.dev testée contre
-  `lodash@4.17.15` → 6 CVE réelles retournées (dont CVE-2020-8203 prototype pollution).
-- **Chantier D (deploy-checklist)** : nouvelle section 2 "Recherche ciblée avant la
-  checklist" — identification de la stack réelle, appel `find-skills` ciblé, recherche
-  web si besoin (`WebSearch`/`perplexity-research`), jamais de skill de déploiement
-  figée par techno. Sections renumérotées (2→3, 3→4).
-- **Chantier A (BMAD Stories)** : nouvelle référence canonique unique
-  `.claude/skills/onboard-project/references/bmad-story.md` (critère de déclenchement
-  ≥2 fonctionnalités, template court format IHM, règle `find-skills` par Story) ;
-  `onboard-project` (nouvelle étape 5, backlog dans `PROJECT.md`) et `dev-cycle` (sous-
-  étape en tête de "2. Plan") y renvoient sans dupliquer le format. `dev-cycle` "3. Code"
-  renvoie aussi vers la règle anti-swap-aveugle de `security-audit` (chantier C).
-- **CLAUDE.md/SOURCES.md (passe finale groupée)** : table de routage à jour (11 skills,
-  lignes `perplexity-research` + mentions BMAD/OSV.dev/find-skills sur les skills
-  existantes touchées), compte "10→11 skills" ; règle 5 (Karpathy) enrichie de la clause
-  anti-swap-aveugle ; section "contre-intuitif" à jour sur les nouveaux seuils crédits et
-  le fix de staleness ; nouvelle entrée `SOURCES.md` "Décisions propres — V1.11"
-  documentant le bug découvert, le choix de seuils, et les chantiers B/C/D. Entrée V1.9
-  de `SOURCES.md` non touchée (historique figé). `grep -rn "9[05] ?%"` passé sur tout le
-  repo pour ne rien oublier — seules les mentions historiques (`SOURCES.md` V1.9,
-  `SESSION.md` V1.10) restent à "95%", correctement, car elles décrivent un état passé.
-- `install/apply.js` : `VERSION` 1.10 → 1.11.
+- **Skill `graphify`** (12e→13e skill au fil de la session) : construit un graphe de
+  connaissances d'un codebase via le CLI tiers `Graphify-Labs/graphify` (source
+  officielle retenue après avoir trouvé plusieurs dépôts clones du même nom). Route vers
+  `security-audit`/`sandbox-pretest` avant toute installation réelle, n'installe rien
+  elle-même.
+- **Hook `update-check.js`** (nouveau, `SessionStart`, 9e hook) + **`lib/latest-version.js`** :
+  compare `.claude/harnais.version` au dernier tag GitHub publié, au plus 1×/24h par
+  projet (état dans `.claude/harnais-update-check.json`, gitignored). N'informe que via
+  `additionalContext` — ne lance jamais `update-harnais` lui-même. Fail-open total
+  (absence de `harnais.version`, timeout, erreur réseau → silence ; ce dépôt source n'a
+  pas ce fichier, donc jamais concerné). Header `User-Agent` explicite requis pour l'API
+  GitHub (piège du module `https` natif de Node, contrairement à curl/PowerShell).
+  **Vérifié** : nouveau `test-update-check.js`, 21/21 (fail-open, comparaison de version,
+  throttle, `FORCE`, robustesse payloads malformés) — env `HARNAIS_UPDATE_CHECK_MOCK_TAGS`/
+  `_MOCK_ERROR`/`_FORCE` pour rester déterministe et hors-ligne dans les tests.
+- **`STATS.md` par projet** (template `templates/STATS.md`, catégorie "create-only" dans
+  `apply.js` comme `SESSION.md`) + **skill `harnais-stats`** (13e skill) : relevé
+  d'usage du socle par projet (skills utilisées, pertinence, problèmes), pensé pour être
+  comparé entre plusieurs projets — structure fixe (tableau à colonnes stables).
+  Contrairement à `session-checkpoint`/`onboard-project`, **n'écrit jamais sans accord
+  explicite préalable** de l'utilisateur (nouvelle convention dans ce socle). Réutilise
+  l'agrégation de `harnais-report` pour la partie quantitative. Squelette `STATS.md`
+  créé dans ce dépôt aussi (structure vide, pas de contenu — le contenu attend l'accord
+  de l'utilisateur, pas fait automatiquement).
+- **Rattrapage `README.md`** : bandeau V1.8 → V1.12, liste des 13 skills complétée,
+  hooks 6 → 9 (avec description des 3 manquants), `permissions.deny` 29 → 39 (recompté
+  depuis `.claude/settings.json`), section "Faire évoluer le socle" mise à jour, et une
+  affirmation devenue fausse depuis V1.10 corrigée (`.env.example` était décrit comme
+  illisible, alors que la liste énumérée le rend lisible). `EVOLUTION.md` étape 4
+  ("Documenter") étend désormais explicitement à `README.md`.
+- `CLAUDE.md`/`SOURCES.md` : table de routage à jour (`graphify`, `harnais-stats`, note
+  sur `update-harnais` déclenchable par `update-check.js`), compte "11→13 skills, 8→9
+  hooks", puce "contre-intuitif" sur le seul hook du socle qui fait un appel réseau.
+  Entrée `SOURCES.md` V1.12 étendue avec les 3 chantiers (pas de nouvelle section — même
+  version tant que rien n'est tagué).
+- `.gitignore` (racine du dépôt, distinct du gabarit propagé par `apply.js`) : ajout de
+  `.claude/harnais-update-check.json`.
+- **Skills `checkpoint-pause`/`checkpoint-resume`** (14e/15e skill, dernier ajout avant
+  commit) : arrêt manuel volontaire sans perte de contexte. `checkpoint-pause` capture
+  vite l'état dans `SESSION.md` § "En cours / bloqué" (+ ligne "Dernier checkpoint",
+  marquée "checkpoint d'urgence") et s'arrête — ne peut pas s'auto-interrompre, Échap/
+  Ctrl+C (natif Claude Code) reste le geste pour stopper une action en cours.
+  `checkpoint-resume` relit cet état et reprend directement, même dans une nouvelle
+  session, sans redemander où on en était. Distinctes de `session-checkpoint`
+  (checkpoint réfléchi de fin d'étape, réécrit toutes les sections) — celle-ci reste la
+  bonne skill hors urgence. `CLAUDE.md`/`README.md`/`SOURCES.md` mis à jour (compte
+  13→15 skills, nouvelle sous-section "Arrêt manuel / reprise" dans README).
 
 ## En cours / bloqué
 
-Rien de bloqué. Reste l'action de clôture ci-dessous (commit + tag + push), qui demande
-une confirmation explicite avant de s'exécuter — action visible/partagée.
+Rien de bloqué. En attente de confirmation utilisateur pour commit + tag v1.12 + push.
 
 ## Prochaines étapes
 
-1. Demander confirmation à l'utilisateur, puis : commit V1.11, tag `v1.11`, push (commit
-   + tag) — même déroulé que V1.10 (attention au faux positif du hook de garde sur un
-   message de commit heredoc contenant `.env`/`cat` : utiliser `git commit -F <fichier>`
-   si le message mentionne des noms de fichiers `.env*` ou "OSV"/"npm audit" à proximité
-   d'un mot déclencheur).
-2. Une fois poussé : test manuel du fix de staleness en conditions quasi réelles (éditer
-   à la main le `ts` d'un `statusline-snapshot.json` pour le rendre périmé avec une valeur
-   déjà élevée enregistrée, exécuter quelques outils, confirmer via `harnais-report`
-   l'apparition de `warn-stale` puis potentiellement `block-forced`) — pas encore fait,
-   seule la batterie automatisée l'a été.
-3. Scénarios de test manuel des chantiers A/B/C/D dans une vraie session (checklist dans
-   le plan `sharded-booping-toast.md`) — pas encore faits, seule la vérification de forme/
-   cohérence croisée (fichiers référencés existants, frontmatter, télémétrie) l'a été.
-4. Futur skill "checkpoint" (retour arrière inter-sessions) : cadrage déjà écrit dans
+1. Commit + tag `v1.12` + push, si l'utilisateur le confirme.
+2. Proposer à l'utilisateur de peupler le contenu de `STATS.md` de ce dépôt via
+   `harnais-stats` (avec son accord explicite avant tout contenu, comme prévu par la
+   skill) — pas fait automatiquement.
+3. Test manuel réel de `update-check.js` en conditions réelles (session fraîche sur un
+   projet avec un vrai `.claude/harnais.version` en retard) — seule la batterie
+   automatisée (mocks) l'a été jusqu'ici.
+4. Test manuel réel de la skill `graphify` le jour où le besoin se présente (voir
+   checkpoint précédent).
+5. Test manuel du fix de staleness du watchdog (V1.11) en conditions quasi réelles —
+   toujours pas fait.
+6. Futur skill "checkpoint" (retour arrière inter-sessions) : cadrage dans
    `EVOLUTION.md`, à construire via `skill-builder` quand le besoin se présente.
-5. Optimisation des tokens : chantier volontairement reporté par l'utilisateur.
+7. Optimisation des tokens : chantier volontairement reporté par l'utilisateur.
 
 ## Problèmes rencontrés / limites connues
 
@@ -99,17 +97,14 @@ une confirmation explicite avant de s'exécuter — action visible/partagée.
   CLAUDE.md reste la défense d'intention ; pour du code réellement suspect,
   `sandbox-pretest` est la réponse, pas le hook.
 - La skill `find-skills` peut faire exécuter `npx skills add ...` sans être interceptée
-  par le hook de garde (aucune des 5 catégories bloquées ne couvre ça) — vigilance
-  normale requise (réputation de la source), documenté dans CLAUDE.md.
-- Support de `hookSpecificOutput.additionalContext` sur l'event `PostToolUse` (utilisé par
-  le nouvel avertissement de staleness dans `hard-stop-guard.js`) **non confirmé** — seul
-  `UserPromptSubmit` l'utilise ailleurs dans ce socle. Si Claude Code l'ignore sur
-  `PostToolUse`, l'écriture stdout est simplement sans effet (fail-open préservé) et la
-  télémétrie `warn-stale` reste le seul filet réel pour ce palier intermédiaire — le
-  blocage dur (`STALE_STREAK_CAP`, `stderr`+`exit 2`) ne dépend lui d'aucun support
-  particulier. À vérifier en conditions réelles (voir "Prochaines étapes" point 2).
-- `.env.example` non lisible par l'outil Read si son nom matche un pattern deny listé —
-  liste énumérée depuis V1.10, `.env.example` explicitement hors de cette liste.
+  par le hook de garde — vigilance normale requise, documenté dans CLAUDE.md (le cas
+  `graphify` en est un exemple concret).
+- `update-check.js` est le seul hook du socle qui fait un appel réseau — throttlé,
+  fail-open, jamais bloquant, mais c'est un changement de nature (aucun hook existant
+  n'en faisait avant V1.12) à garder en tête si un futur hook réseau est envisagé.
+- Support de `hookSpecificOutput.additionalContext` sur `PostToolUse` (utilisé par
+  `hard-stop-guard.js`) toujours non confirmé en conditions réelles — voir "Prochaines
+  étapes" du chantier V1.11 précédent, non repris ici pour rester court.
 - Les patterns `**/` de `permissions.deny` sont relatifs au projet : un fichier secret
   hors projet reste lisible, sauf les chemins home couverts par des règles `~/` explicites.
 - `disableBypassPermissionsMode` neutralise silencieusement `--dangerously-skip-permissions`
@@ -124,17 +119,18 @@ une confirmation explicite avant de s'exécuter — action visible/partagée.
 
 ## Dernier checkpoint
 
+2026-08-25 — **V1.12 complète, pas commitée/poussée** : graphify + update-check.js +
+STATS.md/harnais-stats + rattrapage doc + checkpoint-pause/checkpoint-resume, dans la
+même session (recherche via 3 agents Explore pour les chantiers F/G/H, un plan par
+chantier écrit et approuvé en mode plan). 15 skills, 9 hooks au total désormais. Tests :
+6 suites, 405/405 au total (nouveau test-update-check.js 21/21). Plan détaillé dans
+`C:\Users\hp\.claude\plans\je-souhaiterais-installer-graphify-ancient-wolf.md`. Session :
+9d4a541f-3d3f-43e0-8258-336003ac8184.
+
 2026-08-24 — **V1.11 terminée** : les 5 chantiers (BMAD Stories, Perplexity optionnelle,
 vérification CVE de dépendance + anti-swap-aveugle, déploiement piloté par find-skills,
-fix du watchdog crédits/contexte) faits et vérifiés dans la même session que la reprise
-V1.10. Plan détaillé dans `C:\Users\hp\.claude\plans\sharded-booping-toast.md` (contexte
-complet, décisions validées par l'utilisateur, détail fichier par fichier — 3 questions
-posées via AskUserQuestion avant le plan : placement du découpage Stories, absence de clé
-Perplexity, arbitrage seuils watchdog). Tests : 5 suites, 384/384 au total. API OSV.dev
-vérifiée en conditions réelles (requête contre lodash@4.17.15, 6 CVE retournées). Rien
-commité pour l'instant — en attente de confirmation utilisateur pour commit + tag `v1.11`
-+ push. Session : 58e33e41-469f-4f91-bc2e-4319038c86ec. Détail dans
+fix du watchdog crédits/contexte) faits et vérifiés. Plan détaillé dans
+`C:\Users\hp\.claude\plans\sharded-booping-toast.md`. Tests : 5 suites, 384/384 au
+total. Commit (`6ba4bd7`), tag (`v1.11`) et push confirmés par l'utilisateur et
+exécutés. Session : 58e33e41-469f-4f91-bc2e-4319038c86ec. Détail dans
 `.claude/session-log.md`.
-
-2026-08-24 — V1.10 terminée, commitée (`438ad57`), taguée (`v1.10`) et poussée sur
-`main`. Détail dans `.claude/session-log.md`.

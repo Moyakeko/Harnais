@@ -20,6 +20,14 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start-inject.js\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/update-check.js\""
+          }
+        ]
       }
     ],
     "PreCompact": [

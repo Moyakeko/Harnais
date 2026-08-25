@@ -28,7 +28,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.11";
+const VERSION = "1.12";
 
 // Marqueurs d'idempotence. Le start porte la version (informatif) mais la
 // détection est tolérante à son changement — sinon une mise à jour ne
@@ -60,6 +60,8 @@ credentials*.json
 # État local des watchdogs (snapshot statusline + flags de seuils)
 .claude/statusline-snapshot.json
 .claude/watchdog-state.json
+# État local du hook update-check.js (throttle 24h, dernier tag connu)
+.claude/harnais-update-check.json
 # Télémétrie locale du socle (V1.10) — grossit vite, voulu, voir CLAUDE.md
 .claude/harnais-metrics.jsonl`;
 
@@ -364,6 +366,16 @@ if (fs.existsSync(sessionDst)) {
 } else {
   fs.copyFileSync(path.join(sourceDir, "templates", "SESSION.md"), sessionDst);
   report("créé", "SESSION.md");
+}
+
+// b) Create-only : STATS.md depuis le template (jamais écrasé — squelette rempli
+// ensuite exclusivement par la skill harnais-stats, avec accord de l'utilisateur).
+const statsDst = path.join(targetDir, "STATS.md");
+if (fs.existsSync(statsDst)) {
+  report("conservé (existe déjà)", "STATS.md");
+} else {
+  fs.copyFileSync(path.join(sourceDir, "templates", "STATS.md"), statsDst);
+  report("créé", "STATS.md");
 }
 
 // c) Fusions additives.

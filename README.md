@@ -5,8 +5,10 @@ d'école, projet perso, service déployé pour soi ou ses proches) avec des gard
 sécurité et une méthode de travail déjà en place. Ce dépôt n'est **pas** un projet
 applicatif : c'est le moule que l'on copie au départ de chaque nouveau projet.
 
-Version courante : **V1.8** — installable en une ligne (voir ci-dessous) et mettable à
-jour depuis le chat Claude Code lui-même (skill `update-harnais`, voir plus bas).
+Version courante : **V1.12** — installable en une ligne (voir ci-dessous) et mettable à
+jour depuis le chat Claude Code lui-même (skill `update-harnais`, voir plus bas), avec
+un rappel automatique en début de session si une version plus récente est publiée
+(hook `update-check.js`, jamais d'application automatique).
 
 ## À qui s'adressent les fichiers
 
@@ -15,6 +17,7 @@ jour depuis le chat Claude Code lui-même (skill `update-harnais`, voir plus bas
 | `README.md` (ce fichier) | Toi (humain) | Notice d'utilisation du socle. |
 | `CLAUDE.md` | Claude | Règles non négociables + routage des skills, chargé à chaque session. |
 | `SESSION.md` | Les deux | État courant du travail, injecté automatiquement au démarrage de session. |
+| `STATS.md` | Toi | Usage du socle sur ce projet (skills, pertinence, problèmes) — comparable entre projets, mis à jour seulement avec ton accord (skill `harnais-stats`). |
 | `SOURCES.md` | Toi | D'où viennent les choix de conception (sources + décisions propres). |
 | `EVOLUTION.md` | Les deux | Invariants à respecter pour toute évolution du socle lui-même. |
 
@@ -46,10 +49,10 @@ Ce que fait l'installeur (`install/apply.js`, invoqué par les deux scripts) :
 | Fichier | Traitement |
 |---|---|
 | `.claude/hooks/`, `.claude/skills/`, `.claude/agents/`, `EVOLUTION.md` | Copiés (possédés par le socle). En cas de mise à jour d'un fichier modifié : sauvegarde `.harnais-bak` puis remplacement. |
-| `SESSION.md` | Créé vierge depuis un template — **jamais touché** s'il existe déjà. |
+| `SESSION.md`, `STATS.md` | Créés vierges depuis un template — **jamais touchés** s'ils existent déjà. |
 | `CLAUDE.md`, `.gitignore` | Fusion additive entre marqueurs `harnais:` — un CLAUDE.md existant (BMAD, GSD…) est conservé intact, le bloc socle s'ajoute à la fin. |
 | `.claude/settings.json` | Fusion JSON : hooks ajoutés à côté des existants, `permissions.deny` par union, anti-bypass forcé — jamais de retrait. |
-| `README.md`, `SOURCES.md`, `SESSION.md` du socle, `install.*` | Jamais installés (documentation du socle, pas du projet). |
+| `README.md`, `SOURCES.md`, `SESSION.md`/`STATS.md` du socle, `install.*` | Jamais installés (documentation du socle, pas du projet). |
 
 L'installation est **idempotente** : relancer le one-liner met à jour le socle
 (remplacement entre marqueurs) sans dupliquer ni écraser ce qui appartient au projet.
@@ -90,27 +93,32 @@ en cours) :
   destructrice sans confirmation, pas de « c'est fait » sans vérification réelle,
   pédagogie du pourquoi, principes Karpathy (réflexion avant exécution), `SESSION.md`
   maintenu à jour.
-- **6 hooks** (`.claude/hooks/`) + une **statusline** :
+- **9 hooks** (`.claude/hooks/`) + une **statusline** :
   - `guard-dangerous-commands.js` — bloque par exit code, même en auto-approve,
     5 catégories : suppression récursive large, destruction de disque, git destructif,
     code téléchargé pipé dans un shell, fichiers secrets via le shell. Batterie de
     tests versionnée dans `.claude/hooks/tests/test-guard.js` (138 cas).
   - `session-start-inject.js` — injecte `SESSION.md` + l'ID de session au démarrage.
+  - `update-check.js` — vérifie (1×/24h max, jamais bloquant) si une version plus
+    récente du socle est publiée sur GitHub ; propose seulement, n'applique jamais.
   - `precompact-safety-net.js` — filet de sécurité avant compactage du contexte.
   - `notify-desktop.js` — vrais toasts Windows (fin de tâche, attente d'action).
   - `statusline.js` — capteur du % de contexte et des crédits, alimente les deux
     watchdogs ci-dessous.
-  - `context-watchdog.js` — checkpoint forcé à 85 % de contexte (pas de `/clear`
-    automatique possible : c'est le substitut).
+  - `context-watchdog.js` — rappel doux à 70 % de contexte (checkpoint anticipé).
+  - `hard-stop-guard.js` — arrêt dur à 85 % de contexte / 90 % de crédits 5h (pas de
+    `/clear` automatique possible : c'est le substitut).
   - `credit-watchdog.js` — sauvegarde l'état à la coupure de crédits et prépare la
-    reprise à l'heure de réinitialisation.
-- **29 règles `permissions.deny`** (`.claude/settings.json`) : Claude ne peut pas lire
+    reprise à l'heure de réinitialisation (avec `resume-after-reset.js`).
+- **39 règles `permissions.deny`** (`.claude/settings.json`) : Claude ne peut pas lire
   les fichiers secrets (`.env*`, `*.pem`, clés SSH, états Terraform, `~/.ssh`,
   `~/.aws`…), et `disableBypassPermissionsMode` neutralise le mode
   `--dangerously-skip-permissions`.
-- **8 skills** : `onboard-project`, `dev-cycle`, `security-audit`, `sandbox-pretest`,
-  `deploy-checklist`, `skill-builder`, `session-checkpoint`, `update-harnais` — le
-  routage détaillé est dans `CLAUDE.md`.
+- **15 skills** : `onboard-project`, `dev-cycle`, `security-audit`, `sandbox-pretest`,
+  `deploy-checklist`, `skill-builder`, `session-checkpoint`, `checkpoint-pause`,
+  `checkpoint-resume`, `update-harnais`, `find-skills`, `harnais-report`,
+  `harnais-stats`, `perplexity-research`, `graphify` — le routage détaillé est dans
+  `CLAUDE.md`.
 - **2 sous-agents** : `code-reviewer` (revue large sans polluer le contexte principal),
   `debugger` (root-cause d'un bug, idem).
 
@@ -119,7 +127,10 @@ en cours) :
 ### Une session type
 
 1. **Ouverture** : `SESSION.md` s'affiche tout seul en début de session (hook
-   `SessionStart`) — Claude sait où on en est sans qu'on lui réexplique.
+   `SessionStart`) — Claude sait où on en est sans qu'on lui réexplique. Le même
+   événement vérifie aussi (au plus 1×/24h, silencieux si rien de neuf) qu'une version
+   plus récente du socle n'est pas parue — si oui, Claude le signale et propose
+   `update-harnais`, sans jamais l'appliquer seul.
 2. **Travail** : pour toute tâche non triviale, demander (ou laisser Claude déclencher)
    `dev-cycle` : explorer → planifier → coder → tester → revoir. Pour un bug obscur,
    le sous-agent `debugger` ; pour relire un module entier, `code-reviewer`.
@@ -128,7 +139,19 @@ en cours) :
    `sandbox-pretest`. Avant la mise en prod : `deploy-checklist`.
 4. **Après chaque étape significative** (ou avant de fermer) : « fais le point » —
    la skill `session-checkpoint` réécrit `SESSION.md` et ajoute une entrée datée +
-   ID de session dans `.claude/session-log.md`.
+   ID de session dans `.claude/session-log.md`. Séparément, `harnais-stats` peut mettre
+   à jour `STATS.md` (quelles skills servent, à quel point) — toujours avec ton accord
+   explicite avant d'écrire, pensé pour être comparé entre plusieurs projets.
+
+### Arrêt manuel / reprise
+
+Besoin de partir sans perdre le fil (la tâche a pris plus de temps que prévu, un
+imprévu) ? Si Claude est en plein milieu d'une action, interromps d'abord avec
+**Échap/Ctrl+C** (natif à Claude Code — une commande ne peut pas s'auto-interrompre),
+puis tape `/checkpoint-pause` : l'état est capturé dans `SESSION.md` § "En cours /
+bloqué" et Claude s'arrête, sans finir la tâche. Pour reprendre — même dans une
+nouvelle session — tape `/checkpoint-resume` : Claude relit cet état et continue
+directement, sans qu'on ait besoin de le réexpliquer.
 
 ### Quand une commande est bloquée
 
@@ -154,12 +177,15 @@ existe encore). Le retour arrière sur le code passe par git (un commit par évo
   règles `~/`.
 - `--dangerously-skip-permissions` n'est pas refusé avec une erreur : le flag est
   silencieusement neutralisé et la session tourne en mode permissions normal.
-- `.env.example` n'est pas lisible par Claude (pattern `.env.*`) — nommer le template
-  `env.example` si Claude doit pouvoir le lire.
+- Seules les vraies variantes sensibles de `.env` sont bloquées en lecture (liste
+  énumérée depuis V1.10, pas un wildcard `.env.*`) — un `.env.example` versionné reste
+  donc lisible tel quel ; une variante d'environnement maison non énumérée devrait être
+  ajoutée à cette liste au cas par cas.
 
 ## Faire évoluer le socle
 
 Toute modification du socle lui-même (nouvelle skill, durcissement, dérivation d'une
 variante plus légère) passe par la skill `skill-builder` et doit respecter les
-invariants de `EVOLUTION.md`. Le périmètre actuel (8 skills, 2 agents, 6 hooks) est un
-choix délibéré : on n'ajoute que si le besoin est démontré.
+invariants de `EVOLUTION.md` — y compris tenir cette notice à jour (`README.md`) quand
+un changement touche à l'usage visible du socle. Le périmètre actuel (15 skills, 2
+agents, 9 hooks) est un choix délibéré : on n'ajoute que si le besoin est démontré.

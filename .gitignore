@@ -22,6 +22,9 @@ credentials*.json
 .claude/statusline-snapshot.json
 .claude/watchdog-state.json
 
+# État local du hook update-check.js (V1.12) — throttle 24h, dernier tag connu.
+.claude/harnais-update-check.json
+
 # Télémétrie locale du socle (V1.10, jamais versionnée) — grossit vite,
 # statusline.js journalise à chaque rafraîchissement de la barre de statut :
 # voulu, documenté dans CLAUDE.md/EVOLUTION.md, pas un bug.

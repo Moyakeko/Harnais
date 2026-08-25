@@ -344,3 +344,120 @@ hook déterministe, celle-ci est domaine-spécifique (renforcement de la règle 
 + renvoi croisé depuis `dev-cycle`/`security-audit` à la place). Une skill de déploiement
 générique figée par techno — choix délibéré de recherche dynamique via `find-skills` à
 chaque projet plutôt qu'un contenu qui se périmerait.
+
+## Décisions propres — V1.12 (graphify)
+
+**Contexte** : l'utilisateur a demandé d'installer "graphify" comme skill officielle du
+socle (pas juste un usage personnel ponctuel dans ce dépôt) — un outil tiers qui
+construit un graphe de connaissances interrogable d'un codebase (code, docs, schémas
+SQL, PDFs) pour en explorer l'architecture.
+
+**Recherche préalable (WebSearch/WebFetch/OSV.dev)** : "graphify" recouvre plusieurs
+dépôts GitHub distincts sous des noms quasi identiques — signal classique de
+prolifération de clones. Retenu comme source officielle : `Graphify-Labs/graphify`
+(110k★/10.7k forks, société YC S26, site `graphify.com`, package PyPI `graphifyy`).
+Écartés (mêmes noms/variantes proches, sans garantie sur leur contenu réel) :
+`collabsoft/ai_graphify`, `sharkkyyy10/graphify-`, `wfsh2026/Skill-graphify`,
+`rhanka/graphify`, `safishamsi/graphify`, deux listings sur des marketplaces tierces, un
+domaine concurrent `graphify.net`, et un paquet PyPI voisin `lifeisforu-graphify`. OSV.dev
+interrogé sur `graphifyy` : aucune CVE connue au moment de la rédaction — rassurant mais
+non suffisant à lui seul (outil neuf, lecture large du repo, appels réseau).
+
+**Retenu — conception en routage plutôt qu'en réinvention** : la nouvelle skill
+`graphify` ne réimplémente ni la vérification de version de dépendance ni l'isolation
+d'exécution — elle route explicitement vers `security-audit` (check OSV.dev + anti-swap-
+aveugle, avec le rappel exprès des clones trouvés) et `sandbox-pretest` (première
+exécution isolée), obligatoires avant toute installation réelle du CLI (`uv tool install
+graphifyy`). Même patron que `perplexity-research` : optionnelle, jamais un prérequis
+bloquant — retombe sur l'exploration native (`Grep`/`Glob`/agent `Explore`) si l'outil
+n'est pas installé.
+
+**Retenu — rupture assumée du compte "11 skills"** : la section "Ce qui est
+volontairement absent" de `CLAUDE.md` fixait delibérément ce compte comme un choix de
+sobriété, à faire évoluer "si le besoin s'en fait sentir, pas par défaut" — c'est
+exactement ce cas : demande explicite de l'utilisateur, passée par `skill-builder`, pas
+une dérive automatique. Le compte passe à 12 skills, documenté comme tel plutôt que
+silencieusement laissé obsolète dans `CLAUDE.md`.
+
+**Écarté** : exécuter réellement `uv tool install graphifyy`/`/graphify` sur la machine de
+l'utilisateur au moment de cette décision — l'ajout au socle est une définition de skill
+(documentation + garde-fous de routage), pas une installation du CLI tiers ; c'est à la
+skill elle-même d'imposer les vérifications avant toute installation future sur un vrai
+besoin.
+
+**Suite V1.12 — trois chantiers demandés avant le commit/push** : l'utilisateur a validé
+le commit de `graphify` mais a demandé d'y intégrer trois ajouts avant de pousser (donc
+toujours V1.12, rien n'ayant encore été tagué/publié) : vérification automatique de
+mise à jour au démarrage de session, un fichier `STATS.md` par projet pour comparer
+l'usage du socle entre projets, et une habitude de tenir la documentation utilisateur à
+jour au fil des évolutions.
+
+**Retenu — vérification automatique (hook `update-check.js`)** : nouveau hook
+`SessionStart` (entrée supplémentaire, à côté de `session-start-inject.js` — patron déjà
+en usage pour plusieurs hooks sur un même événement) qui compare la version installée
+(`.claude/harnais.version`) au dernier tag `vX.Y` publié sur GitHub, au plus 1×/24h par
+projet (état dans `.claude/harnais-update-check.json`, gitignored). Ne fait
+**qu'informer** (message dans le contexte, jamais d'application automatique) — cohérent
+avec l'invariant `EVOLUTION.md` de confirmation humaine explicite avant toute action à
+impact. Fail-open systématique : absence de `.claude/harnais.version` (dépôt source du
+socle lui-même, ou projet non installé), timeout, erreur réseau → silence complet ; un
+échec réseau ne met pas à jour le throttle, pour retenter à la session suivante plutôt
+que d'attendre 24h de plus. Nouvelle lib `lib/latest-version.js` (comparaison de version
+en tuples `[major, minor]`, jamais une comparaison de chaîne — même piège que documenté
+dans `install.ps1`/`install.sh` pour `v1.10` vs `v1.9`) ; header `User-Agent` explicite
+requis pour l'API GitHub via le module `https` natif de Node (contrairement à
+`curl`/`Invoke-RestMethod`, qui le posent par défaut — sans lui l'API répond 403).
+**Écarté** : un état "déjà notifié, ne plus redemander" — le rappel revient au rythme du
+throttle tant que la version installée n'a pas changé, ce qui se résout naturellement
+après une mise à jour, sans état de suppression supplémentaire à maintenir. **Écarté**
+aussi : refactoriser la résolution de tag dupliquée dans `install.ps1`/`install.sh`/
+`update-harnais` — hors périmètre de cette demande.
+
+**Retenu — `STATS.md` + skill `harnais-stats`** : nouveau fichier par projet (template
+`templates/STATS.md`, copié une fois comme `SESSION.md`, jamais écrasé), pensé pour être
+collecté et comparé entre plusieurs projets — d'où une structure fixe (tableau "Usage
+par skill" avec colonnes Utilisée/Pertinence/Problèmes) à ne pas faire dériver d'un
+projet à l'autre. Contrairement à `session-checkpoint`/`onboard-project` (aucune n'a
+d'étape de confirmation explicite avant écriture), `harnais-stats` **n'écrit jamais de
+contenu sans accord explicite préalable** — nouvelle convention dans ce socle, dictée
+par la nature du contenu (un jugement sur la pertinence d'un outil, pas un simple état
+de travail). Réutilise l'agrégation déjà écrite dans `harnais-report`
+(`.claude/harnais-metrics.jsonl` par `source`) pour la partie quantitative plutôt que de
+la dupliquer. Skill nommée en écho à `harnais-report` (les deux tournent autour de
+l'usage du socle) mais rôles distincts : `harnais-report` = quantitatif pur, à la
+demande, jamais persisté ; `harnais-stats` = qualitatif + quantitatif, persisté,
+toujours avec accord. Compte skills : 12 → 13 (avec `graphify`, ajouté dans la même
+version : 11 → 13 au total). **Écarté** : un outil d'agrégation multi-projets des
+`STATS.md` collectés — l'utilisateur a dit vouloir faire cette comparaison lui-même, pas
+demandé un outil pour ça.
+
+**Retenu — habitude de documentation à jour + rattrapage immédiat** : `EVOLUTION.md`
+étape 4 ("Documenter") étendue pour inclure explicitement `README.md` quand un
+changement touche à l'usage visible du socle. Rattrapage réel effectué dans la foulée
+(pas seulement la règle pour l'avenir) : `README.md` était resté à **V1.8** pendant que
+le socle était passé à V1.12 — bandeau de version, liste des skills (8 listées sur 13
+réelles), nombre de hooks ("6" sur 9 réels, avec description des 3 manquants :
+`hard-stop-guard.js`, `resume-after-reset.js`, `update-check.js`), règles
+`permissions.deny` ("29" sur 39 réelles, recomptées depuis `.claude/settings.json`), et
+une affirmation devenue fausse depuis V1.10 (`.env.example` prétendu illisible, alors
+que la liste énumérée depuis V1.10 le rend lisible) — corrigée au passage. Constat que
+cette dérive documentaire est exactement ce que l'utilisateur signalait : la preuve que
+la règle seule (sans rattrapage) n'aurait pas suffi.
+
+**Retenu — `checkpoint-pause`/`checkpoint-resume`** : dernier ajout demandé avant le
+commit — une commande manuelle pour arrêter proprement une session (l'utilisateur doit
+partir, la tâche prend plus de temps que prévu) sans perdre l'avancement, et sa
+contrepartie pour reprendre, y compris dans une autre session. Deux skills distinctes
+plutôt qu'une extension de `session-checkpoint` : celle-ci est un checkpoint réfléchi de
+fin d'étape (réécrit toutes les sections), alors que `checkpoint-pause` doit être rapide
+et mécanique (urgence par hypothèse — ne touche que "En cours / bloqué" + la ligne
+"Dernier checkpoint"), et sa contrepartie `checkpoint-resume` n'a pas d'équivalent
+existant (aucune skill ne "reprenait" explicitement sur commande avant celle-ci).
+Noms préfixés `checkpoint-` (plutôt que les mots seuls `pause`/`resume`) pour éviter tout
+recoupement avec une éventuelle commande native de Claude Code, et pour se regrouper
+visuellement avec `session-checkpoint` dans la table de routage. Clarification
+documentée explicitement dans les deux skills et le README : une skill ne peut pas
+s'auto-interrompre — Échap/Ctrl+C (natif à Claude Code) reste le geste qui arrête une
+action en cours, `checkpoint-pause` ne fait que capturer l'état et s'arrêter ensuite,
+volontairement, sans continuer la tâche. Compte skills : 13 → 15 (11 → 15 au total sur
+cette même version V1.12).
