@@ -9,82 +9,61 @@
 
 ## Niveau / statut actuel
 
-**V1.12 complète et vérifiée, pas encore commitée/poussée.** Cinq chantiers dans la
-même version (rien n'a encore été tagué, donc tout reste V1.12) : (1) skill `graphify`,
-(2) vérification automatique de mise à jour au démarrage de session, (3) `STATS.md` par
-projet + skill `harnais-stats`, (4) rattrapage complet de la documentation utilisateur
-(`README.md` était resté à V1.8), (5) `checkpoint-pause`/`checkpoint-resume` (arrêt
-manuel + reprise explicite, sans perte de contexte, y compris entre sessions).
+**V1.12 commitée (`c5608bc`), taguée (`v1.12`) et poussée** (les cinq chantiers de la
+session précédente : `graphify`, `update-check.js`, `STATS.md`/`harnais-stats`,
+rattrapage README, `checkpoint-pause`/`checkpoint-resume`).
 
-Sous ce chantier : V1.11 (BMAD Stories, Perplexity optionnelle, vérification CVE de
-dépendance, déploiement piloté par find-skills, fix watchdog) reste stable, commitée
-(`6ba4bd7`), taguée (`v1.11`) et poussée.
+**Post-V1.12 ("V1.13" en cours, pas encore tagué)** — deux chantiers cette session,
+partis d'un rapport d'incident utilisateur réel :
+1. **Fix du hang `install.ps1`** — commité et poussé (`70a0681`).
+2. **Refonte `STATS.md` → `MONITORING.csv`** — fait et vérifié, **pas encore commité**.
 
 ## Fait
 
-- **Skill `graphify`** (12e→13e skill au fil de la session) : construit un graphe de
-  connaissances d'un codebase via le CLI tiers `Graphify-Labs/graphify` (source
-  officielle retenue après avoir trouvé plusieurs dépôts clones du même nom). Route vers
-  `security-audit`/`sandbox-pretest` avant toute installation réelle, n'installe rien
-  elle-même.
-- **Hook `update-check.js`** (nouveau, `SessionStart`, 9e hook) + **`lib/latest-version.js`** :
-  compare `.claude/harnais.version` au dernier tag GitHub publié, au plus 1×/24h par
-  projet (état dans `.claude/harnais-update-check.json`, gitignored). N'informe que via
-  `additionalContext` — ne lance jamais `update-harnais` lui-même. Fail-open total
-  (absence de `harnais.version`, timeout, erreur réseau → silence ; ce dépôt source n'a
-  pas ce fichier, donc jamais concerné). Header `User-Agent` explicite requis pour l'API
-  GitHub (piège du module `https` natif de Node, contrairement à curl/PowerShell).
-  **Vérifié** : nouveau `test-update-check.js`, 21/21 (fail-open, comparaison de version,
-  throttle, `FORCE`, robustesse payloads malformés) — env `HARNAIS_UPDATE_CHECK_MOCK_TAGS`/
-  `_MOCK_ERROR`/`_FORCE` pour rester déterministe et hors-ligne dans les tests.
-- **`STATS.md` par projet** (template `templates/STATS.md`, catégorie "create-only" dans
-  `apply.js` comme `SESSION.md`) + **skill `harnais-stats`** (13e skill) : relevé
-  d'usage du socle par projet (skills utilisées, pertinence, problèmes), pensé pour être
-  comparé entre plusieurs projets — structure fixe (tableau à colonnes stables).
-  Contrairement à `session-checkpoint`/`onboard-project`, **n'écrit jamais sans accord
-  explicite préalable** de l'utilisateur (nouvelle convention dans ce socle). Réutilise
-  l'agrégation de `harnais-report` pour la partie quantitative. Squelette `STATS.md`
-  créé dans ce dépôt aussi (structure vide, pas de contenu — le contenu attend l'accord
-  de l'utilisateur, pas fait automatiquement).
-- **Rattrapage `README.md`** : bandeau V1.8 → V1.12, liste des 13 skills complétée,
-  hooks 6 → 9 (avec description des 3 manquants), `permissions.deny` 29 → 39 (recompté
-  depuis `.claude/settings.json`), section "Faire évoluer le socle" mise à jour, et une
-  affirmation devenue fausse depuis V1.10 corrigée (`.env.example` était décrit comme
-  illisible, alors que la liste énumérée le rend lisible). `EVOLUTION.md` étape 4
-  ("Documenter") étend désormais explicitement à `README.md`.
-- `CLAUDE.md`/`SOURCES.md` : table de routage à jour (`graphify`, `harnais-stats`, note
-  sur `update-harnais` déclenchable par `update-check.js`), compte "11→13 skills, 8→9
-  hooks", puce "contre-intuitif" sur le seul hook du socle qui fait un appel réseau.
-  Entrée `SOURCES.md` V1.12 étendue avec les 3 chantiers (pas de nouvelle section — même
-  version tant que rien n'est tagué).
-- `.gitignore` (racine du dépôt, distinct du gabarit propagé par `apply.js`) : ajout de
-  `.claude/harnais-update-check.json`.
-- **Skills `checkpoint-pause`/`checkpoint-resume`** (14e/15e skill, dernier ajout avant
-  commit) : arrêt manuel volontaire sans perte de contexte. `checkpoint-pause` capture
-  vite l'état dans `SESSION.md` § "En cours / bloqué" (+ ligne "Dernier checkpoint",
-  marquée "checkpoint d'urgence") et s'arrête — ne peut pas s'auto-interrompre, Échap/
-  Ctrl+C (natif Claude Code) reste le geste pour stopper une action en cours.
-  `checkpoint-resume` relit cet état et reprend directement, même dans une nouvelle
-  session, sans redemander où on en était. Distinctes de `session-checkpoint`
-  (checkpoint réfléchi de fin d'étape, réécrit toutes les sections) — celle-ci reste la
-  bonne skill hors urgence. `CLAUDE.md`/`README.md`/`SOURCES.md` mis à jour (compte
-  13→15 skills, nouvelle sous-section "Arrêt manuel / reprise" dans README).
+- **Fix hang `install.ps1`** : un rapport d'incident décrivait `install.ps1` bloqué
+  indéfiniment (`node.exe` à 0% CPU, aucune sortie) lors d'un `update-harnais` réel.
+  L'investigation a écarté les deux hypothèses du rapport (pas d'auto-suppression du
+  script, pas de capture de sortie interne — `install.ps1` héritait déjà la console) ;
+  cause probable non confirmable à distance (antivirus/EDR local). L'invocation node
+  passe de l'opérateur `&` à `System.Diagnostics.Process` direct (après avoir écarté
+  `Start-Process -PassThru`, dont l'`.ExitCode` s'est révélé peu fiable une fois le
+  process terminé), qui sonde la progression et affiche après 60s un avertissement avec
+  la commande de contournement exacte. `update-harnais/SKILL.md` documente ce problème
+  connu. **Vérifié** bout-en-bout (chemin heureux + chemin d'erreur) sur un dossier de
+  test. Détail complet dans `SOURCES.md` § "V1.13".
+- **`STATS.md` → `MONITORING.csv`** : deux défauts remontés par l'utilisateur à l'usage —
+  format markdown à table réécrite peu adapté à un journal d'événements, et
+  déclenchement de `harnais-stats` sans règle claire pour le cas où Claude remarque un
+  problème de lui-même. Nouveau fichier CSV **append-only** (une ligne = un événement
+  daté, jamais réécrite — même idiome que `.claude/harnais-metrics.jsonl`), même statut
+  create-only que l'ancien `STATS.md` dans `apply.js`. `harnais-stats` gagne deux modes :
+  **automatique** (Claude remarque un incident/succès notable en cours de travail —
+  annonce en une phrase puis écrit directement, sans confirmation bloquante) et
+  **interactif** (demande ouverte explicite — déroulé inchangé : proposer, agréger,
+  noter la pertinence, confirmer avant d'écrire). Colonne `projet` dérivée
+  automatiquement du nom de dossier, jamais demandée. Anciens `STATS.md`/
+  `templates/STATS.md` supprimés (squelettes vides, aucune perte). `CLAUDE.md`,
+  `README.md` (3 endroits), `SOURCES.md` (nouvelle entrée "V1.13") mis à jour. **Vérifié**
+  via `apply.js` sur un dossier de test (création + idempotence) et
+  `test-guard.js` (138/138, non affecté).
 
 ## En cours / bloqué
 
-Rien de bloqué. En attente de confirmation utilisateur pour commit + tag v1.12 + push.
+`MONITORING.csv`/`harnais-stats` pas encore commité/poussé — en attente de confirmation
+utilisateur.
 
 ## Prochaines étapes
 
-1. Commit + tag `v1.12` + push, si l'utilisateur le confirme.
-2. Proposer à l'utilisateur de peupler le contenu de `STATS.md` de ce dépôt via
-   `harnais-stats` (avec son accord explicite avant tout contenu, comme prévu par la
-   skill) — pas fait automatiquement.
+1. Commit + push du chantier `MONITORING.csv`, si l'utilisateur le confirme (garder
+   V1.13 non tagué tant que d'autres chantiers post-V1.12 sont possibles, comme pour
+   V1.12 avant son tag).
+2. Une fois `MONITORING.csv` en place, la skill `harnais-stats` peut être utilisée en
+   mode automatique dès qu'un incident se présente — pas d'action à planifier, ça se
+   déclenche seul en contexte.
 3. Test manuel réel de `update-check.js` en conditions réelles (session fraîche sur un
    projet avec un vrai `.claude/harnais.version` en retard) — seule la batterie
    automatisée (mocks) l'a été jusqu'ici.
-4. Test manuel réel de la skill `graphify` le jour où le besoin se présente (voir
-   checkpoint précédent).
+4. Test manuel réel de la skill `graphify` le jour où le besoin se présente.
 5. Test manuel du fix de staleness du watchdog (V1.11) en conditions quasi réelles —
    toujours pas fait.
 6. Futur skill "checkpoint" (retour arrière inter-sessions) : cadrage dans
@@ -116,10 +95,21 @@ Rien de bloqué. En attente de confirmation utilisateur pour commit + tag v1.12 
 - Éditer `.claude/settings.json`/des messages de commit heredoc contenant `.env`+`cat`
   peut être bloqué par le classificateur de sécurité d'Anthropic (faux positif observé en
   V1.10) — contournement : `Write` du fichier complet, ou `git commit -F <fichier>`.
+- `Start-Process -PassThru` en PowerShell : `.ExitCode` s'est révélé peu fiable une fois
+  le process terminé (vide au lieu du vrai code) — préférer
+  `[Diagnostics.Process]::Start(...)` direct (`New-Object`/`::new` sur `ProcessStartInfo`)
+  dès qu'un script PowerShell doit lire un code de sortie fiable après une attente
+  (découvert en corrigeant le hang `install.ps1`).
 
 ## Dernier checkpoint
 
-2026-08-25 — **V1.12 complète, pas commitée/poussée** : graphify + update-check.js +
+2026-08-26 — **Post-V1.12 ("V1.13")** : fix hang `install.ps1` (commité/poussé,
+`70a0681`) + refonte `STATS.md` → `MONITORING.csv`/`harnais-stats` (fait, vérifié, pas
+commité). Partis tous les deux d'un rapport d'incident réel de l'utilisateur (bug
+`update-harnais` + retour d'usage sur `STATS.md`). Détail complet dans `SOURCES.md`
+§ "Décisions propres — V1.13". Session : 84685b68-10db-43f1-8dbf-65e2346d91a6.
+
+2026-08-25 — **V1.12 complète, commitée/taguée/poussée depuis** : graphify + update-check.js +
 STATS.md/harnais-stats + rattrapage doc + checkpoint-pause/checkpoint-resume, dans la
 même session (recherche via 3 agents Explore pour les chantiers F/G/H, un plan par
 chantier écrit et approuvé en mode plan). 15 skills, 9 hooks au total désormais. Tests :

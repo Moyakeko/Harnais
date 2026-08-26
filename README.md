@@ -17,7 +17,7 @@ un rappel automatique en début de session si une version plus récente est publ
 | `README.md` (ce fichier) | Toi (humain) | Notice d'utilisation du socle. |
 | `CLAUDE.md` | Claude | Règles non négociables + routage des skills, chargé à chaque session. |
 | `SESSION.md` | Les deux | État courant du travail, injecté automatiquement au démarrage de session. |
-| `STATS.md` | Toi | Usage du socle sur ce projet (skills, pertinence, problèmes) — comparable entre projets, mis à jour seulement avec ton accord (skill `harnais-stats`). |
+| `MONITORING.csv` | Toi | Journal daté des incidents/pertinence du socle sur ce projet — comparable entre projets, alimenté automatiquement (incidents) ou avec ton accord (relevés de pertinence sur demande, skill `harnais-stats`). |
 | `SOURCES.md` | Toi | D'où viennent les choix de conception (sources + décisions propres). |
 | `EVOLUTION.md` | Les deux | Invariants à respecter pour toute évolution du socle lui-même. |
 
@@ -49,10 +49,10 @@ Ce que fait l'installeur (`install/apply.js`, invoqué par les deux scripts) :
 | Fichier | Traitement |
 |---|---|
 | `.claude/hooks/`, `.claude/skills/`, `.claude/agents/`, `EVOLUTION.md` | Copiés (possédés par le socle). En cas de mise à jour d'un fichier modifié : sauvegarde `.harnais-bak` puis remplacement. |
-| `SESSION.md`, `STATS.md` | Créés vierges depuis un template — **jamais touchés** s'ils existent déjà. |
+| `SESSION.md`, `MONITORING.csv` | Créés vierges depuis un template — **jamais touchés** s'ils existent déjà. |
 | `CLAUDE.md`, `.gitignore` | Fusion additive entre marqueurs `harnais:` — un CLAUDE.md existant (BMAD, GSD…) est conservé intact, le bloc socle s'ajoute à la fin. |
 | `.claude/settings.json` | Fusion JSON : hooks ajoutés à côté des existants, `permissions.deny` par union, anti-bypass forcé — jamais de retrait. |
-| `README.md`, `SOURCES.md`, `SESSION.md`/`STATS.md` du socle, `install.*` | Jamais installés (documentation du socle, pas du projet). |
+| `README.md`, `SOURCES.md`, `SESSION.md`/`MONITORING.csv` du socle, `install.*` | Jamais installés (documentation du socle, pas du projet). |
 
 L'installation est **idempotente** : relancer le one-liner met à jour le socle
 (remplacement entre marqueurs) sans dupliquer ni écraser ce qui appartient au projet.
@@ -139,9 +139,9 @@ en cours) :
    `sandbox-pretest`. Avant la mise en prod : `deploy-checklist`.
 4. **Après chaque étape significative** (ou avant de fermer) : « fais le point » —
    la skill `session-checkpoint` réécrit `SESSION.md` et ajoute une entrée datée +
-   ID de session dans `.claude/session-log.md`. Séparément, `harnais-stats` peut mettre
-   à jour `STATS.md` (quelles skills servent, à quel point) — toujours avec ton accord
-   explicite avant d'écrire, pensé pour être comparé entre plusieurs projets.
+   ID de session dans `.claude/session-log.md`. Séparément, `harnais-stats` alimente
+   `MONITORING.csv` (incidents constatés en cours de route, ou relevés de pertinence sur
+   demande avec ton accord explicite) — pensé pour être comparé entre plusieurs projets.
 
 ### Arrêt manuel / reprise
 

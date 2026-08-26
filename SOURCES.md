@@ -461,3 +461,53 @@ s'auto-interrompre — Échap/Ctrl+C (natif à Claude Code) reste le geste qui a
 action en cours, `checkpoint-pause` ne fait que capturer l'état et s'arrêter ensuite,
 volontairement, sans continuer la tâche. Compte skills : 13 → 15 (11 → 15 au total sur
 cette même version V1.12).
+
+## Décisions propres — V1.13 (fix install.ps1, refonte MONITORING.csv)
+
+**Contexte** : rapport d'incident utilisateur — `install.ps1` s'est bloqué
+indéfiniment (deux fois) lors d'un `update-harnais` réel, `node.exe` figé à 0% CPU sans
+sortie ni erreur, alors qu'invoquer `apply.js` directement fonctionne normalement.
+
+**Retenu — sondage de progression dans `install.ps1`** : l'investigation (lecture
+directe du code) a écarté les deux hypothèses du rapport — `install.ps1` ne s'autodétruit
+jamais lui-même (seul le dossier temporaire d'extraction est nettoyé, en `finally`,
+après la fin de `apply.js`), et il n'a jamais capturé sa propre sortie (`& node ...`
+héritait déjà directement la console) ; la tentative de contournement du rapport
+utilisant `-RedirectStandardOutput` vers un vrai fichier a d'ailleurs reproduit le même
+blocage, ce qui écarte aussi tout deadlock de pipe. Cause probable non confirmable à
+distance : un antivirus/EDR local retenant `node.exe` le temps d'une vérification de
+réputation sur un script fraîchement téléchargé. Plutôt que de deviner un correctif
+pour une cause invérifiable, l'invocation passe de l'opérateur `&`
+(`Start-Process -PassThru` testé en premier, écarté : son `.ExitCode` s'est révélé
+peu fiable une fois le process terminé) à `System.Diagnostics.Process` direct, qui
+sonde la progression et affiche après 60s un avertissement one-shot avec la commande de
+contournement exacte à copier-coller — jamais de kill automatique. `update-harnais/
+SKILL.md` documente ce problème connu. Vérifié bout-en-bout (chemin heureux et chemin
+d'erreur) sur un dossier de projet de test. **Écarté** : modifier `install.sh`
+(aucune preuve du même symptôme sur Unix) ou ajouter un `Unblock-File` (efficacité
+incertaine sur la cause réelle, `Expand-Archive` ne propage pas nécessairement le
+Mark-of-the-Web aux fichiers extraits).
+
+**Retenu — `STATS.md` → `MONITORING.csv`** : deux défauts remontés par l'utilisateur à
+l'usage du `STATS.md` introduit en V1.12 — un format markdown à table réécrite en place
+ne se prêtait pas à un usage de journal d'événements (l'exemple déclencheur étant
+justement l'incident `install.ps1` ci-dessus, que l'utilisateur veut voir consigné comme
+un fait daté), et le déclenchement de la skill `harnais-stats` ("jamais sans accord
+explicite") n'avait pas de règle claire pour le cas où Claude remarque un problème de
+lui-même. `MONITORING.csv` reprend le même statut create-only que l'ancien `STATS.md`
+(template copié une fois, jamais réécrasé) mais en format CSV **append-only** (une
+ligne = un événement daté, jamais réécrite) — même idiome que
+`.claude/harnais-metrics.jsonl`, choisi plutôt qu'une table à réécrire pour conserver
+l'historique complet au lieu de l'écraser à chaque relevé. `harnais-stats` gagne deux
+modes clairement distincts : **automatique** (Claude remarque un fait concret en cours
+de travail — incident, faux positif, ou succès notable — annonce en une phrase puis
+écrit directement, sans confirmation bloquante) et **interactif** (demande ouverte
+explicite — déroulé inchangé : proposer, agréger via `harnais-report`, noter la
+pertinence, confirmer avant d'écrire). Colonne `projet` dérivée automatiquement du nom
+de dossier (jamais demandée) plutôt que d'ajouter une étape de question à la création du
+fichier — cohérent avec la demande explicite de réduire les questions bloquantes non
+nécessaires. **Écarté** : un fichier séparé en plus de `STATS.md` (l'utilisateur a
+choisi le remplacement complet, un seul mécanisme) ; un nouveau hook de rappel
+périodique façon `update-check.js`/`context-watchdog.js` pour le mode automatique — la
+détection reste un jugement de Claude en contexte, pas un mécanisme à seuil/throttle,
+conformément à ce que l'utilisateur a demandé.

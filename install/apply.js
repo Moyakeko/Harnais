@@ -368,14 +368,15 @@ if (fs.existsSync(sessionDst)) {
   report("créé", "SESSION.md");
 }
 
-// b) Create-only : STATS.md depuis le template (jamais écrasé — squelette rempli
-// ensuite exclusivement par la skill harnais-stats, avec accord de l'utilisateur).
-const statsDst = path.join(targetDir, "STATS.md");
-if (fs.existsSync(statsDst)) {
-  report("conservé (existe déjà)", "STATS.md");
+// b) Create-only : MONITORING.csv depuis le template (jamais écrasé — journal
+// d'événements alimenté ensuite par la skill harnais-stats, en mode automatique
+// ou interactif selon le cas — voir SKILL.md).
+const monitoringDst = path.join(targetDir, "MONITORING.csv");
+if (fs.existsSync(monitoringDst)) {
+  report("conservé (existe déjà)", "MONITORING.csv");
 } else {
-  fs.copyFileSync(path.join(sourceDir, "templates", "STATS.md"), statsDst);
-  report("créé", "STATS.md");
+  fs.copyFileSync(path.join(sourceDir, "templates", "MONITORING.csv"), monitoringDst);
+  report("créé", "MONITORING.csv");
 }
 
 // c) Fusions additives.
