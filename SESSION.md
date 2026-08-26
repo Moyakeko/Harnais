@@ -13,10 +13,16 @@
 session précédente : `graphify`, `update-check.js`, `STATS.md`/`harnais-stats`,
 rattrapage README, `checkpoint-pause`/`checkpoint-resume`).
 
-**Post-V1.12 ("V1.13" en cours, pas encore tagué)** — deux chantiers cette session,
-partis d'un rapport d'incident utilisateur réel :
-1. **Fix du hang `install.ps1`** — commité et poussé (`70a0681`).
-2. **Refonte `STATS.md` → `MONITORING.csv`** — fait et vérifié, **pas encore commité**.
+**V1.13 commitée (`70a0681`, `9d82e3b`), taguée (`v1.13`) et poussée** — deux chantiers
+cette session, partis d'un rapport d'incident utilisateur réel :
+1. **Fix du hang `install.ps1`** (`70a0681`).
+2. **Refonte `STATS.md` → `MONITORING.csv`** (`9d82e3b`).
+
+**Post-V1.13 ("V1.14" en cours, pas encore commité/tagué)** — un chantier, encore parti
+d'un rapport d'incident utilisateur réel (agents en arrière-plan coupés par la vraie
+limite de crédits plutôt que par notre watchdog) : arrêt dur crédits remonté à 95% +
+arrêt propre des agents en arrière-plan (`ListAgents`/`SendMessage`/`TaskStop`
+whitelistés pendant l'arrêt dur). Fait et vérifié, **pas encore commité**.
 
 ## Fait
 
@@ -46,29 +52,50 @@ partis d'un rapport d'incident utilisateur réel :
   `README.md` (3 endroits), `SOURCES.md` (nouvelle entrée "V1.13") mis à jour. **Vérifié**
   via `apply.js` sur un dossier de test (création + idempotence) et
   `test-guard.js` (138/138, non affecté).
+- **Arrêt dur crédits : agents en arrière-plan** : diagnostic confirmé par lecture du
+  code (`sameSessionSnapshot` dans `hard-stop-guard.js` exige que le `session_id` de
+  l'outil corresponde au snapshot statusline — un agent en tâche de fond n'en a pas,
+  donc structurellement invisible au watchdog, ne peut jamais s'auto-arrêter). Plutôt
+  que de la télémétrie par agent (n'aurait pas de sens, les crédits sont un compteur de
+  compte), le correctif est côté orchestration : whitelist étendue à
+  `ListAgents`/`SendMessage`/`TaskStop` pendant l'arrêt dur, `blockMessage()` donne la
+  séquence (prévenir chaque agent actif → finir le checkpoint → `TaskStop` en filet de
+  sécurité). Seuil crédits `CREDIT_HARD_STOP_PCT` remonté 90%→95% (décision utilisateur,
+  marge dédiée à cette séquence). Limite assumée avec l'utilisateur (question posée) :
+  best-effort, pas garanti à 100% — convention complémentaire documentée dans
+  `CLAUDE.md` (tâche multi-parties confiée à un sous-agent → lui demander de
+  checkpointer au fil de l'eau dans `session-log.md`, pas seulement en fin de tâche).
+  Toutes les mentions "90%" mises à jour en cohérence (6 fichiers hooks + README +
+  CLAUDE.md). **Vérifié** : `test-watchdogs.js` mis à jour (nouvelle frontière 94/95%,
+  nouveau test whitelist ListAgents/SendMessage/TaskStop vs Bash toujours bloqué,
+  129/129) + `test-guard.js` (138/138) + inspection manuelle du message généré. Détail
+  complet dans `SOURCES.md` § "V1.14".
 
 ## En cours / bloqué
 
-`MONITORING.csv`/`harnais-stats` pas encore commité/poussé — en attente de confirmation
-utilisateur.
+`hard-stop-guard.js`/agents en arrière-plan pas encore commité/poussé — en attente de
+confirmation utilisateur.
 
 ## Prochaines étapes
 
-1. Commit + push du chantier `MONITORING.csv`, si l'utilisateur le confirme (garder
-   V1.13 non tagué tant que d'autres chantiers post-V1.12 sont possibles, comme pour
-   V1.12 avant son tag).
-2. Une fois `MONITORING.csv` en place, la skill `harnais-stats` peut être utilisée en
-   mode automatique dès qu'un incident se présente — pas d'action à planifier, ça se
-   déclenche seul en contexte.
-3. Test manuel réel de `update-check.js` en conditions réelles (session fraîche sur un
-   projet avec un vrai `.claude/harnais.version` en retard) — seule la batterie
-   automatisée (mocks) l'a été jusqu'ici.
-4. Test manuel réel de la skill `graphify` le jour où le besoin se présente.
-5. Test manuel du fix de staleness du watchdog (V1.11) en conditions quasi réelles —
+1. Commit + push du chantier "arrêt dur crédits/agents" (V1.14), si l'utilisateur le
+   confirme, puis tag quand il le décide (même logique que V1.13 : rester non tagué
+   tant que d'autres chantiers post-V1.13 sont possibles).
+2. Sur un projet déjà installé (ex: `Nope`, en v1.12) : lancer `update-harnais` pour
+   récupérer les dernières versions taguées — `update-check.js` le signalera de
+   lui-même à la prochaine session (confirmé en conditions réelles sur `Nope`).
+3. Test manuel réel de bout en bout du nouveau mécanisme agents/arrêt dur (nécessite un
+   vrai franchissement de seuil crédits avec des agents en vol) — non réalisable en
+   session normale, seule la batterie automatisée (129/129) l'a vérifié jusqu'ici.
+4. Une fois `MONITORING.csv` en place sur un projet, la skill `harnais-stats` peut être
+   utilisée en mode automatique dès qu'un incident se présente — pas d'action à
+   planifier, ça se déclenche seul en contexte.
+5. Test manuel réel de la skill `graphify` le jour où le besoin se présente.
+6. Test manuel du fix de staleness du watchdog (V1.11) en conditions quasi réelles —
    toujours pas fait.
-6. Futur skill "checkpoint" (retour arrière inter-sessions) : cadrage dans
+7. Futur skill "checkpoint" (retour arrière inter-sessions) : cadrage dans
    `EVOLUTION.md`, à construire via `skill-builder` quand le besoin se présente.
-7. Optimisation des tokens : chantier volontairement reporté par l'utilisateur.
+8. Optimisation des tokens : chantier volontairement reporté par l'utilisateur.
 
 ## Problèmes rencontrés / limites connues
 
@@ -103,11 +130,20 @@ utilisateur.
 
 ## Dernier checkpoint
 
+2026-08-26 — **Post-V1.13 ("V1.14")** : arrêt dur crédits remonté à 95% + arrêt propre
+des agents en arrière-plan (`ListAgents`/`SendMessage`/`TaskStop` whitelistés pendant
+l'arrêt dur crédits/contexte) — fait, vérifié (129/129 + 138/138 + inspection manuelle
+du message), pas commité. Parti d'un rapport d'incident réel de l'utilisateur (agents
+coupés par la vraie limite de crédits plutôt que par notre watchdog). Détail complet
+dans `SOURCES.md` § "Décisions propres — V1.14". Session :
+84685b68-10db-43f1-8dbf-65e2346d91a6.
+
 2026-08-26 — **Post-V1.12 ("V1.13")** : fix hang `install.ps1` (commité/poussé,
-`70a0681`) + refonte `STATS.md` → `MONITORING.csv`/`harnais-stats` (fait, vérifié, pas
-commité). Partis tous les deux d'un rapport d'incident réel de l'utilisateur (bug
-`update-harnais` + retour d'usage sur `STATS.md`). Détail complet dans `SOURCES.md`
-§ "Décisions propres — V1.13". Session : 84685b68-10db-43f1-8dbf-65e2346d91a6.
+`70a0681`) + refonte `STATS.md` → `MONITORING.csv`/`harnais-stats` (commité/poussé,
+`9d82e3b`, tagué `v1.13`). Partis tous les deux d'un rapport d'incident réel de
+l'utilisateur (bug `update-harnais` + retour d'usage sur `STATS.md`). Détail complet
+dans `SOURCES.md` § "Décisions propres — V1.13". Session :
+84685b68-10db-43f1-8dbf-65e2346d91a6.
 
 2026-08-25 — **V1.12 complète, commitée/taguée/poussée depuis** : graphify + update-check.js +
 STATS.md/harnais-stats + rattrapage doc + checkpoint-pause/checkpoint-resume, dans la

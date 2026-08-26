@@ -247,7 +247,7 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-// --- hard-stop-guard : arrêt dur crédits (proactif 90%, V1.11), planification, fenêtre de reprise, plafond ---
+// --- hard-stop-guard : arrêt dur crédits (proactif 95%, V1.14), planification, fenêtre de reprise, plafond ---
 {
   const dir = mkProject();
   const env = { CLAUDE_PROJECT_DIR: dir };
@@ -263,13 +263,14 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
   });
 
   const firstBlock = tool("s-hs-credit", "Bash", { command: "ls" });
-  check("crédits ≥90% => exit 2", firstBlock.status === 2);
-  check("crédits ≥90% => message d'ordre de checkpoint", firstBlock.stderr.includes("SESSION.md"));
+  check("crédits ≥95% => exit 2", firstBlock.status === 2);
+  check("crédits ≥95% => message d'ordre de checkpoint", firstBlock.stderr.includes("SESSION.md"));
+  check("crédits ≥95% => message mentionne la séquence agents (SendMessage/TaskStop)", firstBlock.stderr.includes("SendMessage") && firstBlock.stderr.includes("TaskStop"));
   const dry = JSON.parse(firstBlock.stdout);
-  check("crédits ≥90% => planifie la reprise (resumeAt = reset + 60s)", Date.parse(dry.wouldSchedule.resumeAt) === resetSec * 1000 + 60000);
+  check("crédits ≥95% => planifie la reprise (resumeAt = reset + 60s)", Date.parse(dry.wouldSchedule.resumeAt) === resetSec * 1000 + 60000);
 
   const secondBlock = tool("s-hs-credit", "Bash", { command: "ls" });
-  check("crédits ≥90% une 2e fois => bloqué mais pas replanifié (idempotent)", secondBlock.status === 2 && secondBlock.stdout === "");
+  check("crédits ≥95% une 2e fois => bloqué mais pas replanifié (idempotent)", secondBlock.status === 2 && secondBlock.stdout === "");
 
   // Read/Write SESSION.md restent autorisés pendant l'arrêt dur crédits.
   check("Read autorisé pendant hard-stop crédits", tool("s-hs-credit", "Read", { file_path: "x.txt" }).status === 0);
@@ -278,25 +279,32 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
     tool("s-hs-credit", "Write", { file_path: path.join(dir, "SESSION.md") }).status === 0
   );
 
+  // V1.14 : ListAgents/SendMessage/TaskStop autorisés pour prévenir/stopper les
+  // agents en arrière-plan, mais pas un outil quelconque (ex: Bash) resté bloqué.
+  check("ListAgents autorisé pendant hard-stop crédits", tool("s-hs-credit", "ListAgents", {}).status === 0);
+  check("SendMessage autorisé pendant hard-stop crédits", tool("s-hs-credit", "SendMessage", { to: "worker", message: "stop" }).status === 0);
+  check("TaskStop autorisé pendant hard-stop crédits", tool("s-hs-credit", "TaskStop", { task_id: "abc" }).status === 0);
+  check("Bash reste bloqué pendant hard-stop crédits", tool("s-hs-credit", "Bash", { command: "ls" }).status === 2);
+
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-// --- hard-stop-guard : régression du resserrement de seuil (95% -> 90%, V1.11) ---
+// --- hard-stop-guard : nouvelle frontière de seuil crédits (94% passe, 95% bloque, V1.14) ---
 {
   const dir = mkProject();
   const env = { CLAUDE_PROJECT_DIR: dir };
-  const tool = (sid) =>
-    run("hard-stop-guard.js", ["PostToolUse"], { session_id: sid, cwd: dir, tool_name: "Bash", tool_input: { command: "ls" } }, env);
+  const tool = (sid, pct) => {
+    writeSnapshot(dir, {
+      session_id: sid,
+      ts: Date.now(),
+      context_used_percentage: 10,
+      five_hour: { used_percentage: pct },
+    });
+    return run("hard-stop-guard.js", ["PostToolUse"], { session_id: sid, cwd: dir, tool_name: "Bash", tool_input: { command: "ls" } }, env);
+  };
 
-  // 91% était SOUS l'ancien seuil (95%) donc serait passé avant V1.11 ; doit
-  // désormais bloquer, preuve que le resserrement a un effet réel.
-  writeSnapshot(dir, {
-    session_id: "s-hs-credit91",
-    ts: Date.now(),
-    context_used_percentage: 10,
-    five_hour: { used_percentage: 91 },
-  });
-  check("crédits 91% (entre l'ancien et le nouveau seuil) => bloque désormais", tool("s-hs-credit91").status === 2);
+  check("crédits 94% (sous le nouveau seuil) => passe", tool("s-hs-credit94", 94).status === 0);
+  check("crédits 95% (nouveau seuil) => bloque", tool("s-hs-credit95", 95).status === 2);
 
   fs.rmSync(dir, { recursive: true, force: true });
 }

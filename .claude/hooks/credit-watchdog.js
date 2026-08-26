@@ -8,11 +8,11 @@
  *      precompact-safety-net.js) : erreur, dernier message assistant, queue du
  *      transcript. Un hook ne raisonne pas — le checkpoint riche reste le rôle
  *      de la skill session-checkpoint (poussée par context-watchdog quand les
- *      crédits passent 85%, ou forcée par hard-stop-guard.js à 90%) ; ici on
+ *      crédits passent 85%, ou forcée par hard-stop-guard.js à 95%) ; ici on
  *      garantit juste qu'aucune trace ne se perd.
  *   2. Planifie la reprise via lib/resume-scheduler.js (Register-ScheduledTask
  *      à l'heure de réinitialisation + 1 min) — MÊME mécanisme que le chemin
- *      PROACTIF de hard-stop-guard.js (seuil 90%, avant qu'une vraie coupure
+ *      PROACTIF de hard-stop-guard.js (seuil 95%, avant qu'une vraie coupure
  *      ne survienne) : les deux chemins doivent aboutir à la même reprise
  *      automatique supervisée (terminal visible + instruction injectée, voir
  *      resume-after-reset.js), pas de logique dupliquée ni divergente.

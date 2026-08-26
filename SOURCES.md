@@ -511,3 +511,60 @@ choisi le remplacement complet, un seul mécanisme) ; un nouveau hook de rappel
 périodique façon `update-check.js`/`context-watchdog.js` pour le mode automatique — la
 détection reste un jugement de Claude en contexte, pas un mécanisme à seuil/throttle,
 conformément à ce que l'utilisateur a demandé.
+
+## Décisions propres — V1.14 (arrêt dur crédits : stopper proprement les agents en arrière-plan)
+
+**Contexte** : rapport d'incident utilisateur — sur un autre projet, l'arrêt dur crédits
+(90%) s'est déclenché correctement sur la session principale (checkpoint écrit dans
+SESSION.md/session-log.md), mais plusieurs agents lancés en arrière-plan (`Agent` tool)
+étaient encore en cours au même moment et ont continué à consommer des crédits jusqu'à
+être coupés net par l'épuisement réel du quota, sans sauvegarde propre.
+
+**Diagnostic confirmé par lecture du code** (pas une supposition) : la détection de
+seuil dans `hard-stop-guard.js` exige que le `session_id` de l'appel d'outil corresponde
+à celui du snapshot statusline (`sameSessionSnapshot`). Un agent en tâche de fond n'a pas
+de statusline propre — ses propres appels tombent donc systématiquement dans la branche
+"snapshot périmé", et comme il n'a jamais eu de relevé frais pour accumuler
+`lastKnownCtx`/`lastKnownCredit`, même l'escalade de secours sur staleness (fix V1.11)
+ne peut jamais se déclencher pour lui. Un sous-agent est donc **structurellement
+invisible** à ce mécanisme — pas un bug ponctuel, une limite de conception du hook.
+
+**Retenu — orchestration plutôt que télémétrie par agent** : donner à chaque sous-agent
+sa propre mesure de crédits n'aurait pas de sens (les crédits sont un compteur de
+compte/fenêtre, pas par agent). Le correctif vit côté session principale, qui sait
+quels agents elle a lancés et n'a pas encore vus revenir : la whitelist de
+`hard-stop-guard.js` (jusqu'ici limitée à `Read` et `Write`/`Edit` sur `SESSION.md`/
+`session-log.md`) s'étend à `ListAgents`/`SendMessage`/`TaskStop`, et `blockMessage()`
+donne désormais la séquence explicite à suivre : (1) `SendMessage` à chaque agent encore
+actif lui demandant de sauvegarder immédiatement dans `session-log.md`, (2) terminer le
+checkpoint habituel — son temps sert naturellement de fenêtre de réaction, pas besoin
+d'attente artificielle (aucun outil de `sleep` n'est de toute façon whitelisté), (3)
+`TaskStop` sur chacun en filet de sécurité, qu'il ait eu ou non le temps de sauvegarder.
+**Écarté** : `TaskOutput` dans la whitelist — il peut rapatrier tout le transcript d'un
+agent dans le contexte, contre-productif pendant un arrêt d'urgence ; `ListAgents` seul
+suffit pour savoir qui tourne encore, les notifications de fin arrivant de toute façon
+automatiquement.
+
+**Limite assumée, actée avec l'utilisateur (question posée explicitement)** : ce reste
+du best-effort, pas une garantie à 100% — un agent en plein milieu d'un unique appel
+d'outil au moment du `TaskStop` perd ce qui n'est pas encore écrit. Convention
+complémentaire documentée dans `CLAUDE.md` : toute tâche multi-parties confiée à un
+sous-agent doit lui demander explicitement de checkpointer sa progression au fil de
+l'eau dans `session-log.md`, pas seulement dans son rapport final, pour limiter la perte
+réelle. C'est strictement mieux que la situation actuelle (coupure incontrôlée par le
+vrai quota, aucune chance de sauvegarde), pas une résolution complète du problème.
+
+**Retenu — seuil crédits remonté de 90% à 95%** : décision explicite de l'utilisateur,
+pour se garder une marge dédiée à cette séquence d'arrêt propre (prévenir, laisser une
+fenêtre de réaction, stopper, finir le checkpoint) plutôt que d'attendre le mur des
+100%. Ironie assumée : V1.11 avait justement resserré ce même seuil de 95% à 90% pour
+réagir plus tôt ; le retour à 95% n'est pas un désaveu de ce choix mais une réponse à un
+problème différent (agents en vol, pas détection tardive) — les deux raisonnements
+restent valides dans leur contexte respectif, documentés l'un et l'autre. Toutes les
+mentions documentaires de "90%" ont été mises à jour en cohérence (`README.md`,
+`CLAUDE.md`, commentaires d'en-tête de `context-watchdog.js`/`credit-watchdog.js`/
+`resume-scheduler.js`/`resume-after-reset.js`), sauf les entrées historiques de ce
+fichier qui documentent fidèlement l'état des versions passées. Test de régression
+(`test-watchdogs.js`, seuil 95%↔90% de V1.11) devenu obsolète avec ce changement,
+remplacé par un test de la nouvelle frontière (94% passe, 95% bloque) plutôt que
+supprimé silencieusement.

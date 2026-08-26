@@ -140,15 +140,17 @@ s'appuient dessus plutôt que de réinventer leur logique.
   - `hard-stop-guard.js` (`PostToolUse`, vérifié après CHAQUE outil — pas seulement à
     l'envoi d'un message) : **arrêt DUR** à 85 % du contexte. Si un message d'ordre de ce
     hook apparaît (stderr d'un tool bloqué), obéis immédiatement : seuls `Read`
-    (n'importe quel fichier) et `Write`/`Edit` sur `SESSION.md`/`.claude/session-log.md`
-    restent autorisés. Termine le checkpoint dans ces deux fichiers puis dis à
-    l'utilisateur de fermer la session et d'en ouvrir une nouvelle (ou `/clear`) —
-    n'essaie pas de continuer la tâche interrompue avec d'autres outils, le hook te
-    bloquera à chaque tentative. Ce blocage n'est jamais réarmé seul : seul un
-    `/compact` manuel ou une nouvelle session repart propre.
+    (n'importe quel fichier), `Write`/`Edit` sur `SESSION.md`/`.claude/session-log.md`,
+    et `ListAgents`/`SendMessage`/`TaskStop` (V1.14 — voir plus bas) restent autorisés.
+    Termine le checkpoint dans ces deux fichiers puis dis à l'utilisateur de fermer la
+    session et d'en ouvrir une nouvelle (ou `/clear`) — n'essaie pas de continuer la
+    tâche interrompue avec d'autres outils, le hook te bloquera à chaque tentative. Ce
+    blocage n'est jamais réarmé seul : seul un `/compact` manuel ou une nouvelle session
+    repart propre.
 - Le même `hard-stop-guard.js` applique un arrêt dur analogue aux crédits de la fenêtre
-  5h, à 90 % (en plus du rappel doux de `context-watchdog.js` à 85 %, seuils resserrés en
-  V1.11 — voir plus bas pour le fix associé du fail-open sur snapshot périmé) : il planifie une
+  5h, à 95 % (en plus du rappel doux de `context-watchdog.js` à 85 %, seuil remonté de
+  90 à 95 % en V1.14 pour se garder une marge dédiée à l'arrêt propre des agents en
+  arrière-plan — voir plus bas pour le fix associé du fail-open sur snapshot périmé) : il planifie une
   **reprise automatique** à la réinitialisation — `resume-after-reset.js` ouvre alors
   lui-même un terminal visible avec `claude --resume <session>` et une instruction de
   continuation injectée (bornée à la tâche en cours, section "En cours / bloqué" de
@@ -169,6 +171,23 @@ s'appuient dessus plutôt que de réinventer leur logique.
   crédits), un avertissement est émis après 10 outils consécutifs sans nouveau relevé,
   puis un arrêt dur conservateur après 20 — sans base "en zone de vigilance", aucune
   escalade sur la seule staleness (une session peu active n'est pas punie).
+- **V1.14 — agents en arrière-plan invisibles à `hard-stop-guard.js`.** La détection de
+  seuil exige que le snapshot statusline corresponde au `session_id` courant — un agent
+  lancé en tâche de fond (outil `Agent`) n'a pas de statusline propre, donc il ne peut
+  **pas** s'auto-arrêter via ce mécanisme, même si le seuil réel est dépassé (constaté en
+  conditions réelles : la session principale s'arrête proprement, mais des agents lancés
+  plus tôt continuaient jusqu'à être coupés par le vrai épuisement de crédits, sans
+  sauvegarde). Le correctif est côté orchestration, pas télémétrie par agent : pendant
+  l'arrêt dur, `ListAgents`/`SendMessage`/`TaskStop` sont whitelistés, et le message
+  d'ordre du hook demande explicitement de prévenir (`SendMessage`, sauvegarde immédiate
+  dans `session-log.md`) puis stopper (`TaskStop`) chaque agent encore actif, en plus du
+  checkpoint habituel. Reste du best-effort assumé, pas une garantie à 100% : un agent en
+  plein milieu d'un unique appel d'outil au moment du `TaskStop` perd ce qui n'est pas
+  encore écrit — strictement mieux que la coupure actuelle par le vrai quota, pas plus.
+  Convention complémentaire : toute tâche multi-parties confiée à un sous-agent doit lui
+  demander explicitement de checkpointer sa progression au fil de l'eau dans
+  `session-log.md` (pas seulement dans son rapport final), pour limiter la perte réelle
+  si un `TaskStop` (ou la vraie coupure) le coupe en plein milieu.
 - La skill `update-harnais` télécharge `install.ps1`/`install.sh` dans un fichier puis
   l'exécute directement (deux étapes séparées, jamais pipées) — ce n'est pas un
   contournement du hook de garde, c'est précisément le mécanisme que ce même CLAUDE.md

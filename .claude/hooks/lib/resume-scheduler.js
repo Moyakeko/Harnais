@@ -2,7 +2,7 @@
  * lib/resume-scheduler.js — planification de la reprise après réinitialisation
  * des crédits, extrait de credit-watchdog.js (V1.7) quand un deuxième
  * consommateur est apparu (hard-stop-guard.js, arrêt dur proactif, seuil
- * resserré à 90% en V1.11) : les deux déclencheurs (réactif StopFailure, proactif)
+ * resserré à 95% en V1.14) : les deux déclencheurs (réactif StopFailure, proactif)
  * doivent produire exactement le même comportement de planification — un seul
  * endroit à tester/maintenir plutôt qu'un copier-coller.
  *

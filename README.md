@@ -106,8 +106,10 @@ en cours) :
   - `statusline.js` — capteur du % de contexte et des crédits, alimente les deux
     watchdogs ci-dessous.
   - `context-watchdog.js` — rappel doux à 70 % de contexte (checkpoint anticipé).
-  - `hard-stop-guard.js` — arrêt dur à 85 % de contexte / 90 % de crédits 5h (pas de
-    `/clear` automatique possible : c'est le substitut).
+  - `hard-stop-guard.js` — arrêt dur à 85 % de contexte / 95 % de crédits 5h (pas de
+    `/clear` automatique possible : c'est le substitut). Pendant l'arrêt, en plus du
+    checkpoint SESSION.md, la session principale prévient (SendMessage) puis stoppe
+    (TaskStop) les agents en arrière-plan encore actifs — sinon invisibles à ce hook.
   - `credit-watchdog.js` — sauvegarde l'état à la coupure de crédits et prépare la
     reprise à l'heure de réinitialisation (avec `resume-after-reset.js`).
 - **39 règles `permissions.deny`** (`.claude/settings.json`) : Claude ne peut pas lire

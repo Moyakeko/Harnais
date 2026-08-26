@@ -13,7 +13,7 @@
  *     Jamais réarmé seul : seul un /compact manuel (event PostCompact,
  *     encore possible même auto-compact désactivé) ou une nouvelle session
  *     repart propre.
- *   - Crédits 5h ≥ 90% : même blocage, MAIS borné dans le temps plutôt que
+ *   - Crédits 5h ≥ 95% : même blocage, MAIS borné dans le temps plutôt que
  *     permanent — puisque `claude --resume` continue le MÊME session_id,
  *     l'entrée d'état est partagée entre la session bloquée et sa reprise
  *     automatique. Le blocage crédits reste actif tant que l'heure de
@@ -38,7 +38,7 @@
  * (autoResumeActive), le considère terminé (fin normale ou arrêt forcé) et
  * remet à zéro TOUT l'état crédits (creditHardStop, creditResumeScheduled,
  * autoResumeUnblockAt, autoResumeActive, autoResumeActionCount) — un nouveau
- * franchissement à 90% (prochaine fenêtre 5h) repartira propre. Ce flag n'est
+ * franchissement à 95% (prochaine fenêtre 5h) repartira propre. Ce flag n'est
  * JAMAIS posé en usage interactif classique : aucune ambiguïté possible avec
  * une session normale qui termine simplement son tour.
  *
@@ -61,6 +61,28 @@
  * forcedReason déjà existant pour le plafond anti-emballement). Sans base
  * "en zone de vigilance", aucune escalade sur la seule staleness — une
  * session simplement peu active ne doit pas être punie.
+ *
+ * V1.14 — agents en arrière-plan invisibles à ce hook : la détection de seuil
+ * exige que le snapshot statusline corresponde au session_id courant
+ * (sameSessionSnapshot) — un agent lancé en tâche de fond (Agent tool) n'a
+ * pas de statusline propre, donc ses propres appels d'outils tombent
+ * systématiquement dans la branche "périmé" sans jamais accumuler de valeur
+ * connue : il ne peut PAS s'auto-arrêter via ce mécanisme, même si le seuil
+ * réel est dépassé. Constaté en conditions réelles : la session principale
+ * s'arrête proprement, mais des agents lancés plus tôt continuent jusqu'à
+ * être coupés par le vrai épuisement de crédits, sans sauvegarde. Correctif
+ * côté orchestration plutôt que télémétrie par agent (les crédits sont un
+ * compteur de compte/fenêtre, pas par agent) : la whitelist inclut désormais
+ * ListAgents/SendMessage/TaskStop, et blockMessage() donne à la session
+ * principale la séquence à suivre — prévenir chaque agent encore actif
+ * (SendMessage, lui demander de sauvegarder immédiatement), finir son propre
+ * checkpoint (le temps pris sert de fenêtre de réaction), puis TaskStop
+ * chacun en filet de sécurité. Reste du best-effort assumé : un agent en
+ * plein milieu d'un unique appel d'outil au moment du TaskStop perd ce qui
+ * n'est pas encore écrit — strictement mieux que la coupure actuelle par le
+ * vrai quota (aucune chance de sauvegarde), pas une garantie à 100%. Seuil
+ * crédits remonté de 90% à 95% en même temps, pour se garder une marge
+ * dédiée à cette séquence plutôt que d'attendre le mur des 100%.
  */
 
 const fs = require("fs");
@@ -69,7 +91,7 @@ const { scheduleResume, resolveClaudeBin, toEpochMs } = require("./lib/resume-sc
 const { logMetric } = require("./lib/metrics");
 
 const CONTEXT_HARD_STOP_PCT = 85;
-const CREDIT_HARD_STOP_PCT = 90;
+const CREDIT_HARD_STOP_PCT = 95;
 const SNAPSHOT_MAX_AGE_MS = 5 * 60 * 1000;
 const STATE_TTL_MS = 24 * 60 * 60 * 1000;
 const RESUME_DELAY_MS = 60 * 1000;
@@ -121,11 +143,18 @@ function loadMaxActions(projectDir) {
   return cfg && typeof cfg.autoResumeMaxActions === "number" ? cfg.autoResumeMaxActions : DEFAULT_MAX_ACTIONS;
 }
 
-// Whitelist active pendant un arrêt dur : tout Read, plus Write/Edit
-// spécifiquement sur SESSION.md ou .claude/session-log.md (comparaison de
-// chemin résolue, insensible à la casse — Windows).
+// Whitelist active pendant un arrêt dur : tout Read, Write/Edit spécifiquement
+// sur SESSION.md ou .claude/session-log.md (comparaison de chemin résolue,
+// insensible à la casse — Windows), plus ListAgents/SendMessage/TaskStop (V1.14)
+// pour prévenir puis stopper proprement les agents en arrière-plan encore actifs
+// — voir en-tête. Volontairement PAS TaskOutput : il peut rapatrier tout le
+// transcript d'un agent dans le contexte, contre-productif pendant un arrêt
+// d'urgence (ListAgents suffit pour savoir qui tourne encore).
+const AGENT_WIND_DOWN_TOOLS = new Set(["ListAgents", "SendMessage", "TaskStop"]);
+
 function isWhitelisted(toolName, toolInput, projectDir) {
   if (toolName === "Read") return true;
+  if (AGENT_WIND_DOWN_TOOLS.has(toolName)) return true;
   if (toolName === "Write" || toolName === "Edit") {
     const raw = (toolInput && toolInput.file_path) || "";
     if (!raw) return false;
@@ -139,11 +168,22 @@ function isWhitelisted(toolName, toolInput, projectDir) {
 function blockMessage(reason) {
   return (
     `[hard-stop-guard] ARRÊT DUR ACTIF (${reason}).\n` +
-    `Seuls Read (n'importe quel fichier) et Write/Edit sur SESSION.md ou ` +
-    `.claude/session-log.md restent autorisés. Termine IMMÉDIATEMENT le ` +
-    `checkpoint (ce qui a été fait, où tu t'es arrêté précisément) dans ces ` +
-    `deux fichiers, puis dis à l'utilisateur de fermer cette session et d'en ` +
-    `ouvrir une nouvelle (ou /clear). N'utilise plus aucun autre outil.\n`
+    `Outils encore autorisés : Read (n'importe quel fichier), Write/Edit sur ` +
+    `SESSION.md ou .claude/session-log.md, ListAgents, SendMessage, TaskStop. ` +
+    `Aucun autre outil, et ne relance aucun nouvel agent.\n` +
+    `Si des agents en arrière-plan sont encore actifs (pas encore de notification ` +
+    `de fin reçue — ListAgents en secours si besoin, ex: après une compaction) :\n` +
+    `  1. Envoie IMMÉDIATEMENT un SendMessage à chacun, lui demandant de ` +
+    `sauvegarder son avancement dans .claude/session-log.md puis de terminer au ` +
+    `plus vite.\n` +
+    `  2. Termine le checkpoint habituel (ce qui a été fait, où tu t'es arrêté ` +
+    `précisément, ET la liste de ces agents avec ce qu'ils faisaient) dans ` +
+    `SESSION.md/session-log.md — le temps pris ici sert de fenêtre de réaction ` +
+    `à l'étape 1, pas besoin d'attendre artificiellement.\n` +
+    `  3. Appelle ensuite TaskStop sur chacun d'eux, qu'ils aient eu ou non le ` +
+    `temps de sauvegarder — c'est un filet de sécurité, pas une attente.\n` +
+    `Puis dis à l'utilisateur de fermer cette session et d'en ouvrir une nouvelle ` +
+    `(ou /clear).\n`
   );
 }
 
