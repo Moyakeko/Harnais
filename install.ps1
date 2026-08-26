@@ -63,8 +63,41 @@ try {
     $sha = ($srcDir.Name -split '-')[-1]
   }
 
-  & node (Join-Path $src 'install\apply.js') --source $src --target (Get-Location).Path --commit $sha
-  if ($LASTEXITCODE -ne 0) { throw "L'installation a échoué (code $LASTEXITCODE)." }
+  $apply = Join-Path $src 'install\apply.js'
+  $target = (Get-Location).Path
+
+  # System.Diagnostics.Process direct (et non l'opérateur & ni Start-Process) pour
+  # pouvoir sonder la progression sans capturer la sortie : UseShellExecute=$false
+  # sans redirection hérite la console du parent, donc aucun changement de
+  # comportement dans le cas normal — et .ExitCode reste lisible de façon fiable
+  # après WaitForExit(), contrairement à `Start-Process -PassThru` (ExitCode vide
+  # de façon intermittente une fois le process terminé, bug connu de la cmdlet).
+  # Un antivirus/EDR local qui retient l'exécution d'un script fraîchement
+  # téléchargé peut bloquer node.exe plusieurs minutes sans aucune sortie ni
+  # activité CPU visible, avant de le laisser continuer normalement (voir
+  # SKILL.md de update-harnais). Sans ce sondage, ce blocage est indiscernable
+  # d'un install.ps1 qui a planté.
+  function Format-NodeArg([string]$s) { '"{0}"' -f ($s -replace '"', '\"') }
+  $argLine = (@($apply, '--source', $src, '--target', $target, '--commit', $sha) |
+    ForEach-Object { Format-NodeArg $_ }) -join ' '
+
+  $psi = [Diagnostics.ProcessStartInfo]::new('node', $argLine)
+  $psi.UseShellExecute = $false
+  $proc = [Diagnostics.Process]::Start($psi)
+  $warnAfterSec = 60
+  $warned = $false
+  while (-not $proc.WaitForExit($warnAfterSec * 1000)) {
+    if ($warned) { continue }
+    $warned = $true
+    Write-Warning (
+      "L'installation semble bloquée depuis plus de $warnAfterSec s sans terminer, sans " +
+      "sortie ni erreur. Ce n'est généralement pas une erreur d'apply.js mais un " +
+      "antivirus/EDR local qui analyse les fichiers fraîchement téléchargés. Si ça " +
+      "persiste, vous pouvez lancer directement (sans risque, la fusion est " +
+      "idempotente) :`n  node `"$apply`" --source `"$src`" --target `"$target`" --commit $sha"
+    )
+  }
+  if ($proc.ExitCode -ne 0) { throw "L'installation a échoué (code $($proc.ExitCode))." }
 }
 finally {
   Remove-Item -Path $tmp -Recurse -Force -ErrorAction SilentlyContinue

@@ -94,6 +94,24 @@ mécanisme qu'une première installation, rejoué sur un projet qui a déjà le 
 n'ajoute/fusionne que ce qui doit l'être, jamais d'écrasement du travail en cours (voir
 garanties ci-dessous).
 
+## Problème connu — blocage silencieux (Windows)
+
+Il est arrivé que `install.ps1` bloque plusieurs minutes à l'étape 4 : le process
+`node.exe` démarre avec les bons arguments mais reste à 0 % CPU, mémoire figée, sans
+la moindre sortie ni écriture de fichier — ce n'est **pas** un bug d'`apply.js` (il
+s'exécute normalement en moins d'une seconde en invocation directe), et **pas** un
+deadlock de pipe interne à `install.ps1` (celui-ci n'a jamais capturé sa sortie —
+`& node ...` hérite directement la console). La cause la plus probable est un
+antivirus/EDR local qui retient l'exécution d'un script fraîchement téléchargé le
+temps d'une vérification de réputation — invérifiable et non corrigible depuis Claude
+Code. Depuis V1.13, `install.ps1` sonde lui-même la progression et affiche un
+avertissement après 60 s d'inactivité, avec la commande de contournement exacte à
+copier-coller. Si le blocage survient quand même sans que cet avertissement soit
+visible (sortie non affichée, tool en arrière-plan…), le contournement manuel est :
+repérer le dossier source déjà extrait (`%TEMP%\harnais-install-<guid>\...`, visible
+via `Get-CimInstance Win32_Process -Filter "Name='node.exe'"` sur le process bloqué)
+puis invoquer directement `node <src>\install\apply.js --source <src> --target <projet> --commit <sha>` — sans risque, la fusion est idempotente.
+
 ## 5. Nettoyer
 
 Supprime le fichier temporaire téléchargé à l'étape 3.
