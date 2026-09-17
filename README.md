@@ -5,7 +5,7 @@ d'école, projet perso, service déployé pour soi ou ses proches) avec des gard
 sécurité et une méthode de travail déjà en place. Ce dépôt n'est **pas** un projet
 applicatif : c'est le moule que l'on copie au départ de chaque nouveau projet.
 
-Version courante : **V1.12** — installable en une ligne (voir ci-dessous) et mettable à
+Version courante : **V1.14** — installable en une ligne (voir ci-dessous) et mettable à
 jour depuis le chat Claude Code lui-même (skill `update-harnais`, voir plus bas), avec
 un rappel automatique en début de session si une version plus récente est publiée
 (hook `update-check.js`, jamais d'application automatique).

@@ -2,7 +2,7 @@
 /**
  * apply.js — moteur d'installation/mise à jour du socle Harnais sur un projet.
  *
- * Usage : node apply.js --source <socle extrait> --target <projet> --commit <sha>
+ * Usage : node apply.js --source <socle extrait> --target <projet> --commit <sha> --tag <vX.Y>
  *
  * Invoqué par install.ps1 / install.sh (bootstraps minces : ils téléchargent et
  * extraient, toute la logique vit ici — une seule implémentation de la fusion,
@@ -28,7 +28,33 @@
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.12";
+function arg(name) {
+  const i = process.argv.indexOf(`--${name}`);
+  return i !== -1 ? process.argv[i + 1] : undefined;
+}
+
+const sourceDir = arg("source");
+const targetDir = arg("target");
+const commit = arg("commit") || "inconnu";
+const tagArg = arg("tag");
+
+// Numéro de version : dérivé du tag git réellement résolu par install.ps1/install.sh
+// (--tag <vX.Y>) — c'est CE tag qui a été téléchargé et exécuté, donc la seule source
+// fiable. Jamais une constante à bumper à la main : V1.13 a été taguée sans que cette
+// constante soit remontée, et apply.js a continué à réécrire "1.12" indéfiniment dans
+// les projets cibles malgré le tag publié (voir EVOLUTION.md invariant 4). Repli sur
+// le fichier VERSION à la racine du socle uniquement quand aucun tag n'a été résolu
+// (mode dev local HARNAIS_SOURCE_DIR, ou repli sur une branche sans tag).
+function resolveVersion(tag, srcDir) {
+  if (tag && /^v\d+\.\d+$/.test(tag)) return tag.slice(1);
+  try {
+    return fs.readFileSync(path.join(srcDir || ".", "VERSION"), "utf8").trim();
+  } catch (e) {
+    fail("version introuvable : ni --tag résolu ni fichier VERSION à la racine du socle.");
+  }
+}
+
+const VERSION = resolveVersion(tagArg, sourceDir);
 
 // Marqueurs d'idempotence. Le start porte la version (informatif) mais la
 // détection est tolérante à son changement — sinon une mise à jour ne
@@ -326,16 +352,7 @@ function mergeSettings(srcPath, dstPath) {
 // Programme principal
 // ---------------------------------------------------------------------------
 
-function arg(name) {
-  const i = process.argv.indexOf(`--${name}`);
-  return i !== -1 ? process.argv[i + 1] : undefined;
-}
-
-const sourceDir = arg("source");
-const targetDir = arg("target");
-const commit = arg("commit") || "inconnu";
-
-if (!sourceDir || !targetDir) fail("usage : node apply.js --source <dir> --target <dir> [--commit <sha>]");
+if (!sourceDir || !targetDir) fail("usage : node apply.js --source <dir> --target <dir> [--commit <sha>] [--tag <vX.Y>]");
 if (!fs.existsSync(path.join(sourceDir, ".claude", "settings.json")) || !fs.existsSync(path.join(sourceDir, "CLAUDE.md")))
   fail(`source invalide (${sourceDir}) : .claude/settings.json ou CLAUDE.md introuvable.`);
 if (!fs.existsSync(targetDir)) fail(`cible introuvable : ${targetDir}`);

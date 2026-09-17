@@ -59,10 +59,20 @@ de garde :
    end-to-end (répertoire vierge, répertoire avec CLAUDE.md + settings.json +
    .gitignore préexistants) et en double exécution (le 2e run ne doit rien changer,
    ni créer de nouveau backup) — avant commit, comme la batterie du hook.
-4. **Bump de version** : `VERSION` dans `apply.js` (reportée dans
-   `.claude/harnais.version` du projet cible) suit la version du socle ; les
+4. **Bump de version — dérivé du tag, pas d'une constante à la main** (depuis V1.14).
+   `apply.js` reçoit `--tag vX.Y` (résolu par `install.ps1`/`install.sh`/
+   `update-harnais` — le tag réellement téléchargé et exécuté) et en dérive
+   `VERSION`, reportée dans `.claude/harnais.version` du projet cible ; les
    marqueurs restent détectés quel que soit le numéro (mise à jour possible depuis
-   n'importe quelle version antérieure).
+   n'importe quelle version antérieure). Avant V1.14, `VERSION` était une constante
+   hardcodée dans `apply.js`, à remonter à la main à chaque tag — le tag `v1.13` a
+   été poussé sans ce bump, et `apply.js` a continué à réécrire `"1.12"` dans tous
+   les projets cibles malgré le tag publié plus récent (boucle constatée côté
+   utilisateur : `update-harnais` "réussissait" sans jamais faire progresser la
+   version). Seul le mode dev local (`HARNAIS_SOURCE_DIR`, sans tag résolu) retombe
+   encore sur un réglage manuel : le fichier `VERSION` à la racine du dépôt — à
+   bumper au moment de tagger, mais qui n'affecte plus aucune installation réelle
+   depuis un tag publié si on l'oublie.
 5. **Versionnage par tag git, pas par branche mouvante** (depuis V1.10) :
    `install.sh`/`install.ps1`/`update-harnais` résolvent le dernier tag `vX.Y` publié
    (`api.github.com/repos/.../tags`, comparaison numérique — un tri lexical ou

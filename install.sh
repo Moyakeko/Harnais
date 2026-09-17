@@ -55,6 +55,7 @@ latest_ref() {
   echo "$best"
 }
 
+REF=""
 if [ -n "${HARNAIS_SOURCE_DIR:-}" ]; then
   SRC="$HARNAIS_SOURCE_DIR"
   SHA="local"
@@ -73,4 +74,8 @@ else
   SHA="${SRC##*-}"
 fi
 
-node "$SRC/install/apply.js" --source "$SRC" --target "$PWD" --commit "$SHA"
+if [ -n "$REF" ]; then
+  node "$SRC/install/apply.js" --source "$SRC" --target "$PWD" --commit "$SHA" --tag "$REF"
+else
+  node "$SRC/install/apply.js" --source "$SRC" --target "$PWD" --commit "$SHA"
+fi

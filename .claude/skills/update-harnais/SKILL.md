@@ -110,7 +110,7 @@ copier-coller. Si le blocage survient quand même sans que cet avertissement soi
 visible (sortie non affichée, tool en arrière-plan…), le contournement manuel est :
 repérer le dossier source déjà extrait (`%TEMP%\harnais-install-<guid>\...`, visible
 via `Get-CimInstance Win32_Process -Filter "Name='node.exe'"` sur le process bloqué)
-puis invoquer directement `node <src>\install\apply.js --source <src> --target <projet> --commit <sha>` — sans risque, la fusion est idempotente.
+puis invoquer directement `node <src>\install\apply.js --source <src> --target <projet> --commit <sha> --tag <ref résolue à l'étape 2>` — sans risque, la fusion est idempotente. Ne pas omettre `--tag` : c'est lui (pas une constante interne à `apply.js`) qui détermine le numéro de version réellement écrit dans `.claude/harnais.version` — l'omettre ferait retomber sur le fichier `VERSION` du dépôt source, généralement correct mais moins fiable que la référence déjà résolue.
 
 ## 5. Nettoyer
 

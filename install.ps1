@@ -42,6 +42,7 @@ function Resolve-LatestRef {
 $tmp = Join-Path $env:TEMP "harnais-install-$([guid]::NewGuid())"
 New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
+  $ref = $null
   if ($env:HARNAIS_SOURCE_DIR) {
     $src = $env:HARNAIS_SOURCE_DIR
     $sha = 'local'
@@ -78,8 +79,9 @@ try {
   # SKILL.md de update-harnais). Sans ce sondage, ce blocage est indiscernable
   # d'un install.ps1 qui a planté.
   function Format-NodeArg([string]$s) { '"{0}"' -f ($s -replace '"', '\"') }
-  $argLine = (@($apply, '--source', $src, '--target', $target, '--commit', $sha) |
-    ForEach-Object { Format-NodeArg $_ }) -join ' '
+  $applyArgs = @($apply, '--source', $src, '--target', $target, '--commit', $sha)
+  if ($ref) { $applyArgs += @('--tag', $ref) }
+  $argLine = ($applyArgs | ForEach-Object { Format-NodeArg $_ }) -join ' '
 
   $psi = [Diagnostics.ProcessStartInfo]::new('node', $argLine)
   $psi.UseShellExecute = $false
@@ -94,7 +96,8 @@ try {
       "sortie ni erreur. Ce n'est généralement pas une erreur d'apply.js mais un " +
       "antivirus/EDR local qui analyse les fichiers fraîchement téléchargés. Si ça " +
       "persiste, vous pouvez lancer directement (sans risque, la fusion est " +
-      "idempotente) :`n  node `"$apply`" --source `"$src`" --target `"$target`" --commit $sha"
+      "idempotente) :`n  node `"$apply`" --source `"$src`" --target `"$target`" --commit $sha" +
+      $(if ($ref) { " --tag $ref" } else { "" })
     )
   }
   if ($proc.ExitCode -ne 0) { throw "L'installation a échoué (code $($proc.ExitCode))." }
