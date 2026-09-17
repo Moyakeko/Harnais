@@ -18,11 +18,11 @@ cette session, partis d'un rapport d'incident utilisateur réel :
 1. **Fix du hang `install.ps1`** (`70a0681`).
 2. **Refonte `STATS.md` → `MONITORING.csv`** (`9d82e3b`).
 
-**Post-V1.13 ("V1.14" en cours, pas encore commité/tagué)** — un chantier, encore parti
-d'un rapport d'incident utilisateur réel (agents en arrière-plan coupés par la vraie
-limite de crédits plutôt que par notre watchdog) : arrêt dur crédits remonté à 95% +
-arrêt propre des agents en arrière-plan (`ListAgents`/`SendMessage`/`TaskStop`
-whitelistés pendant l'arrêt dur). Fait et vérifié, **pas encore commité**.
+**V1.14 commitée (`74bd2c2`, `da7d225`), taguée (`v1.14`) et poussée** — deux
+chantiers, tous deux partis d'un rapport d'incident utilisateur réel :
+1. **Arrêt dur crédits 95% + arrêt propre des agents en arrière-plan** (`74bd2c2`).
+2. **Fix de la boucle infinie `update-harnais`** (`da7d225`) : `.claude/harnais.version`
+   ne progressait jamais au-delà de v1.12 malgré une "mise à jour" annoncée réussie.
 
 ## Fait
 
@@ -70,32 +70,47 @@ whitelistés pendant l'arrêt dur). Fait et vérifié, **pas encore commité**.
   nouveau test whitelist ListAgents/SendMessage/TaskStop vs Bash toujours bloqué,
   129/129) + `test-guard.js` (138/138) + inspection manuelle du message généré. Détail
   complet dans `SOURCES.md` § "V1.14".
+- **Fix boucle infinie `update-harnais`** : rapport utilisateur — `update-harnais`
+  annonçait une transition v1.12 → v1.13/v1.14 et un redémarrage de session, mais après
+  redémarrage la version restait v1.12, en boucle. Cause racine confirmée dans le code :
+  `install/apply.js` écrivait `.claude/harnais.version` depuis une constante `VERSION`
+  hardcodée (`"1.12"`), jamais remontée au moment de tagger `v1.13`
+  (`git show v1.13:install/apply.js` contenait encore `"1.12"`) — `install.ps1`/
+  `install.sh` résolvaient pourtant le bon tag GitHub mais ne le transmettaient jamais à
+  `apply.js`. Correctif structurel : `apply.js` dérive désormais `VERSION` du tag
+  réellement résolu (nouvel argument `--tag`, transmis par `install.ps1`/`install.sh`),
+  avec repli sur un nouveau fichier `VERSION` racine uniquement en mode dev local sans
+  tag — rend cette classe de bug impossible plutôt que de corriger le chiffre une fois
+  de plus (règle déjà documentée dans `EVOLUTION.md` invariant 4, pas appliquée
+  mécaniquement lors du tag v1.13). `EVOLUTION.md`, `README.md` (bandeau de version) et
+  `update-harnais/SKILL.md` mis à jour en cohérence. **Vérifié** : scénario exact du bug
+  rejoué (`apply.js` sur une cible à `"1.12"` + `--tag v1.14` → écrit `"1.14"`),
+  idempotence (second run → `déjà à jour`), repli sans `--tag`, `install.sh` réel exécuté
+  end-to-end contre le tag `v1.14` publié sur GitHub, `test-guard.js` (138/138) inchangé.
 
 ## En cours / bloqué
 
-`hard-stop-guard.js`/agents en arrière-plan pas encore commité/poussé — en attente de
-confirmation utilisateur.
+Rien de bloquant.
 
 ## Prochaines étapes
 
-1. Commit + push du chantier "arrêt dur crédits/agents" (V1.14), si l'utilisateur le
-   confirme, puis tag quand il le décide (même logique que V1.13 : rester non tagué
-   tant que d'autres chantiers post-V1.13 sont possibles).
-2. Sur un projet déjà installé (ex: `Nope`, en v1.12) : lancer `update-harnais` pour
-   récupérer les dernières versions taguées — `update-check.js` le signalera de
-   lui-même à la prochaine session (confirmé en conditions réelles sur `Nope`).
-3. Test manuel réel de bout en bout du nouveau mécanisme agents/arrêt dur (nécessite un
+1. Sur les projets réellement bloqués dans la boucle `update-harnais` (dont celui à
+   l'origine du rapport) : relancer `update-harnais` maintenant que `v1.14` est publiée
+   avec le fix — devrait enfin faire progresser `.claude/harnais.version` au-delà de
+   v1.12. Pas encore vérifié sur un vrai projet utilisateur (seulement en bac à sable +
+   `install.sh` réel contre GitHub).
+2. Test manuel réel de bout en bout du mécanisme agents/arrêt dur crédits (nécessite un
    vrai franchissement de seuil crédits avec des agents en vol) — non réalisable en
    session normale, seule la batterie automatisée (129/129) l'a vérifié jusqu'ici.
-4. Une fois `MONITORING.csv` en place sur un projet, la skill `harnais-stats` peut être
+3. Une fois `MONITORING.csv` en place sur un projet, la skill `harnais-stats` peut être
    utilisée en mode automatique dès qu'un incident se présente — pas d'action à
    planifier, ça se déclenche seul en contexte.
-5. Test manuel réel de la skill `graphify` le jour où le besoin se présente.
-6. Test manuel du fix de staleness du watchdog (V1.11) en conditions quasi réelles —
+4. Test manuel réel de la skill `graphify` le jour où le besoin se présente.
+5. Test manuel du fix de staleness du watchdog (V1.11) en conditions quasi réelles —
    toujours pas fait.
-7. Futur skill "checkpoint" (retour arrière inter-sessions) : cadrage dans
+6. Futur skill "checkpoint" (retour arrière inter-sessions) : cadrage dans
    `EVOLUTION.md`, à construire via `skill-builder` quand le besoin se présente.
-8. Optimisation des tokens : chantier volontairement reporté par l'utilisateur.
+7. Optimisation des tokens : chantier volontairement reporté par l'utilisateur.
 
 ## Problèmes rencontrés / limites connues
 
@@ -129,6 +144,16 @@ confirmation utilisateur.
   (découvert en corrigeant le hang `install.ps1`).
 
 ## Dernier checkpoint
+
+2026-09-17 — **V1.14 taguée/poussée** : fix de la boucle infinie `update-harnais`
+(`VERSION` dérivée du tag `--tag` réellement résolu par `install.ps1`/`install.sh` au
+lieu d'une constante hardcodée dans `apply.js` — cause racine du rapport utilisateur,
+confirmée par lecture directe du code et de l'historique git) + le chantier
+"arrêt dur crédits/agents" déjà commité (`74bd2c2`). Tag `v1.14` créé et poussé
+(confirmé par l'utilisateur), vérifié en rejouant `install.sh` réel contre GitHub
+depuis un dossier séparé. `README.md` (bandeau de version), `EVOLUTION.md` (invariant
+4) et `update-harnais/SKILL.md` mis à jour en cohérence. Session :
+686f571e-a62e-4144-896b-9a664571e1b8.
 
 2026-08-26 — **Post-V1.13 ("V1.14")** : arrêt dur crédits remonté à 95% + arrêt propre
 des agents en arrière-plan (`ListAgents`/`SendMessage`/`TaskStop` whitelistés pendant
