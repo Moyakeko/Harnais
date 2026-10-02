@@ -9,7 +9,7 @@
 
 ## Niveau / statut actuel
 
-**V1.15 implémentée, pas encore commitée/taguée/poussée** — trois chantiers inspirés
+**V1.15 commitée (`25dd535`), taguée (`v1.15`) et poussée** — trois chantiers inspirés
 d'ECC (github.com/affaan-m/ecc), périmètre scopé explicitement avec l'utilisateur :
 1. **`LESSONS.md`** : mémoire persistante project-local versionnée avec git.
 2. **`config-audit`** : nouvelle skill, version réduite d'AgentShield (audit de
@@ -65,9 +65,9 @@ Rien de bloquant.
 6. Futur skill "checkpoint" (retour arrière inter-sessions) : cadrage dans
    `EVOLUTION.md`, à construire via `skill-builder` quand le besoin se présente.
 7. Optimisation des tokens : chantier volontairement reporté par l'utilisateur.
-8. **V1.15 à commiter/pousser, et taguer `v1.15` après confirmation de l'utilisateur**
-   (mémoire opérée uniquement par le jugement de Claude dans `session-checkpoint` — pas
-   encore observée en usage réel sur une session de longueur normale).
+8. `LESSONS.md`/`config-audit` pas encore observés en usage réel sur une session de
+   longueur normale (mémoire opérée uniquement par le jugement de Claude dans
+   `session-checkpoint`, jamais testée "en vol").
 9. Repo tiers d'économie de tokens évoqué par l'utilisateur pendant la discussion V1.15 :
    nom non retrouvé sur le moment, à reprendre si l'utilisateur s'en souvient.
 
@@ -104,14 +104,14 @@ Rien de bloquant.
 
 ## Dernier checkpoint
 
-2026-10-02 — **V1.15 implémentée, pas encore commitée** : trois chantiers inspirés d'ECC
-scopés explicitement avec l'utilisateur (après recherche `WebFetch` sur le repo source) —
-`LESSONS.md` (mémoire project-local versionnée avec git, maintenue par
-`session-checkpoint` en fin de session), `config-audit` (AgentShield réduit, jamais
-bloquant), détection du gestionnaire de paquets dans `onboard-project`. 6 suites de
-tests hooks inchangées (138/61/32/30/21/129 OK), `apply.js` testé sur dossier scratch
-(création + idempotence + non-écrasement d'un `LESSONS.md` existant). Détail complet
-dans `SOURCES.md` § "Décisions propres — V1.15". Session :
+2026-10-02 — **V1.15 commitée (`25dd535`), taguée (`v1.15`) et poussée** : trois
+chantiers inspirés d'ECC scopés explicitement avec l'utilisateur (après recherche
+`WebFetch` sur le repo source) — `LESSONS.md` (mémoire project-local versionnée avec
+git, maintenue par `session-checkpoint` en fin de session), `config-audit` (AgentShield
+réduit, jamais bloquant), détection du gestionnaire de paquets dans `onboard-project`.
+6 suites de tests hooks inchangées (138/61/32/30/21/129 OK), `apply.js` testé sur
+dossier scratch (création + idempotence + non-écrasement d'un `LESSONS.md` existant).
+Détail complet dans `SOURCES.md` § "Décisions propres — V1.15". Session :
 7e5cd61c-df2f-41b5-a493-222f6973007a.
 
 2026-09-17 — **V1.14 taguée/poussée** : fix de la boucle infinie `update-harnais`
