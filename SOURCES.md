@@ -11,12 +11,19 @@ fois qu'une nouvelle source inspire un changement du socle.
 `skills/` (workflows à la demande), `hooks/` (blocage déterministe par exit code),
 `agents/` (sous-agents scopés). C'est l'architecture derrière ce socle, en miniature.
 
-**Écarté** : les 277+ skills, 67 agents, le système de mémoire/apprentissage continu
-("instincts" avec score de confiance), et la couche sécurité multi-agents (AgentShield).
-Pourquoi : conçus pour un usage professionnel à grande échelle ; pour un usage solo
-étudiant, ce niveau d'appareillage coûterait plus en maintenance qu'il n'apporterait de
-valeur. Un système de mémoire à moitié construit donne une fausse confiance — pire que
-ne pas en avoir.
+**Écarté (V1 initiale)** : les 277+ skills, 67 agents, le système de mémoire/
+apprentissage continu ("instincts" avec score de confiance), et la couche sécurité
+multi-agents (AgentShield). Pourquoi : conçus pour un usage professionnel à grande
+échelle ; pour un usage solo étudiant, ce niveau d'appareillage coûterait plus en
+maintenance qu'il n'apporterait de valeur. Un système de mémoire à moitié construit
+donne une fausse confiance — pire que ne pas en avoir.
+
+**Révisé en V1.15** : deux versions réduites de ces idées écartées ont été ajoutées sur
+demande explicite de l'utilisateur, pas une dérive automatique — voir
+"Décisions propres — V1.15" en bas de ce fichier pour le détail du périmètre retenu
+(volontairement beaucoup plus restreint que l'original ECC) et de ce qui reste écarté
+(scoring de confiance, auto-génération de skills, 277+ skills/67 agents, scanner
+multi-agents continu, support multi-harnais).
 
 ## AIS-OS (github.com/nateherkai/AIS-OS)
 
@@ -568,3 +575,63 @@ fichier qui documentent fidèlement l'état des versions passées. Test de régr
 (`test-watchdogs.js`, seuil 95%↔90% de V1.11) devenu obsolète avec ce changement,
 remplacé par un test de la nouvelle frontière (94% passe, 95% bloque) plutôt que
 supprimé silencieusement.
+
+## Décisions propres — V1.15 (mémoire project-local, audit config, détection paquets)
+
+**Contexte** : demande directe de l'utilisateur — améliorer le socle en s'inspirant
+d'ECC (github.com/affaan-m/ecc), après recherche (`WebFetch` sur le repo) confirmant
+qu'il s'agit d'un framework complet (293 skills, 68 agents, mémoire à score de confiance,
+AgentShield, multi-harnais) très au-delà du périmètre solo de ce socle. Clarifié en deux
+tours de questions explicites avec l'utilisateur (pas une interprétation libre) : (1)
+périmètre réduit à trois chantiers scopés — mémoire persistante, audit de config,
+détection de gestionnaire de paquets —, pas d'import en bloc du reste ; (2) déclenchement
+automatique en fin de session pour la mémoire, pas seulement sur demande.
+
+**Retenu — `LESSONS.md` (mémoire persistante project-local)** : fichier à la racine,
+inspiré du "Memory Vault" d'ECC (Markdown inspectable) mais volontairement réduit — pas
+de score de confiance ("instincts"), pas d'auto-génération de skill à partir des leçons
+accumulées. Différence déterminante avec ECC repérée avant de concevoir quoi que ce
+soit : Claude Code dispose déjà nativement d'une mémoire auto-apprise
+(`~/.claude/projects/.../memory/`), mais elle est **globale au compte**, pas versionnée
+avec le projet — elle ne suit pas le repo quand il est cloné ailleurs ou distribué comme
+socle à un nouveau projet/collaborateur. `LESSONS.md` comble exactement ce manque
+(project-local, suivi par git) sans dupliquer la mémoire native. Format repris du
+triptyque règle/pourquoi/comment-l'appliquer qui fonctionne déjà dans cette mémoire
+native, adapté au contexte d'un projet. Organisé par thème (pas chronologique),
+contrairement à `.claude/session-log.md` (journal chronologique, hors git).
+
+**Retenu — déclenchement par extension de `session-checkpoint`, pas un nouveau hook** :
+option choisie plutôt qu'un hook `Stop` dédié. `EVOLUTION.md` distingue deux couches —
+critique/déterministe (hooks) vs non-critique/jugement du modèle (CLAUDE.md/skills).
+Décider si un moment de session constitue une "leçon non-évidente" est un jugement
+sémantique qu'un hook JS ne peut pas trancher, seulement rappeler — et un hook qui ne
+ferait que rappeler dupliquerait `context-watchdog.js` sans valeur ajoutée réelle.
+`session-checkpoint` gagne donc un déclencheur "systématiquement avant de terminer une
+session", et une règle explicite de ne rien écrire si rien de non-évident n'a été appris
+— pour ne pas reproduire le piège du "système à moitié construit = fausse confiance"
+déjà identifié dans la section ECC de ce fichier, cette fois appliqué à l'automatisation
+elle-même plutôt qu'à la mémoire. Un hook `Stop` dédié reste envisageable plus tard si
+l'usage réel montre que Claude oublie trop souvent — pas anticipé par construction.
+
+**Retenu — `config-audit` (AgentShield réduit)** : nouvelle skill qui audite `.claude/`
+lui-même (settings.json, hooks, serveurs MCP, surface d'injection de prompt dans
+CLAUDE.md/SKILL.md) plutôt que le code du projet — complémentaire à `security-audit`
+(code/dépendances) sans le dupliquer. Choisi parmi les briques d'ECC comme celle qui
+colle le mieux à l'identité déjà très sécuritaire de ce socle (hook de garde,
+`permissions.deny`, anti-bypass). Volontairement réduit face à l'AgentShield original :
+rapport ponctuel sur demande, jamais un scanner continu multi-agents, et ne bloque
+jamais rien par lui-même — les garanties bloquantes restent le rôle exclusif de
+`guard-dangerous-commands.js` (invariant `EVOLUTION.md`).
+
+**Retenu — détection du gestionnaire de paquets dans `onboard-project`** : petit ajout
+à l'étape de détection de stack existante (déjà basée sur les fichiers présents) pour
+aussi déduire le gestionnaire depuis le lockfile (dont `uv`/`uv.lock` pour Python,
+explicitement demandé par l'utilisateur), et le noter dans `PROJECT.md`. Signale
+l'ambiguïté plutôt que de deviner si plusieurs lockfiles coexistent.
+
+**Écarté** : les 293 skills/68 agents d'ECC, le support multi-harnais (Cursor/Codex/
+Zed/etc.), la couche de commandes slash dédiée, une couche de règles par langage
+(`rules/typescript`, `rules/python`...) — l'utilisateur ne l'a pas retenue parmi les
+idées mineures proposées. Un repo tiers d'économie de tokens évoqué par l'utilisateur en
+cours de discussion, nom non retrouvé sur le moment — explicitement reporté à une session
+ultérieure, pas construit à l'aveugle. Compte skills : 15 → 16 (`config-audit`).

@@ -25,7 +25,13 @@ reposer les questions.
    contente-toi de le lire pour charger le contexte.
 2. Détecte la stack automatiquement à partir des fichiers présents (`package.json`,
    `requirements.txt`, `pyproject.toml`, `Cargo.toml`, `go.mod`, `pom.xml`, etc.) — ne
-   demande pas à l'utilisateur ce que tu peux déduire toi-même du repo.
+   demande pas à l'utilisateur ce que tu peux déduire toi-même du repo. Déduis aussi le
+   gestionnaire de paquets depuis le lockfile présent, pour utiliser la bonne commande
+   sans redemander (Node : `package-lock.json`→npm, `pnpm-lock.yaml`→pnpm,
+   `yarn.lock`→yarn, `bun.lockb`→bun ; Python : `uv.lock`→uv, `poetry.lock`→poetry,
+   `Pipfile.lock`→pipenv, `requirements.txt` seul→pip). Si plusieurs lockfiles
+   coexistent (migration d'un gestionnaire à l'autre), signale l'ambiguïté à
+   l'utilisateur plutôt que de deviner — note-le dans `PROJECT.md` une fois tranché.
 3. Pose au maximum ces questions (saute celles dont la réponse est évidente depuis le
    repo ou le contexte de la conversation) :
    - Nature du projet : devoir/TP noté, projet perso, ou service à faire tourner pour de

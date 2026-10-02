@@ -109,8 +109,12 @@ pour les projets perso groupés, et des copies ponctuelles pour les projets isol
 
 ## Ce que cette skill ne fait pas
 
-Ne construit pas de système de mémoire/apprentissage continu (façon ECC) — ce socle a
-choisi de ne pas en avoir en V1. Si ce besoin apparaît un jour, c'est une décision à
+Ne construit pas de système de mémoire/apprentissage continu à score de confiance façon
+ECC ("instincts", auto-génération de skills à partir des patterns accumulés) — ce socle a
+choisi de ne pas en avoir, décision réaffirmée en V1.15 en même temps que l'ajout d'une
+mémoire plus simple (`LESSONS.md`, voir `session-checkpoint` et `SOURCES.md`) : un
+fichier Markdown project-local tenu par le jugement de Claude, sans scoring ni
+auto-promotion. Toute évolution vers un système plus proche d'ECC reste une décision à
 prendre explicitement avec l'utilisateur, pas une conséquence automatique de
 `skill-builder`.
 

@@ -61,7 +61,10 @@ permission actif.
    déjà injecté automatiquement au démarrage par un hook). Mets-le à jour via la skill
    `session-checkpoint` après chaque étape significative — reste un pointeur court, pas
    un journal qui s'accumule. Une fois qu'un point bloquant listé dedans est résolu,
-   retire-le plutôt que de le garder en historique.
+   retire-le plutôt que de le garder en historique. La même skill `session-checkpoint`
+   maintient aussi `LESSONS.md` (V1.15) — mémoire project-local versionnée avec git,
+   réservée aux leçons non-évidentes (correction utilisateur, piège contre-intuitif) —
+   systématiquement avant de terminer une session, pas seulement sur demande explicite.
 
 ## Skills du socle — quand les utiliser
 
@@ -70,6 +73,7 @@ permission actif.
 | `onboard-project` | Une fois, au tout début d'un nouveau projet posé sur ce socle — si plusieurs fonctionnalités émergent, découpage en Stories BMAD + `find-skills` par Story. |
 | `dev-cycle` | Pour toute fonctionnalité/bug non trivial : explore → plan → code → test → review. Même découpage en Stories que `onboard-project` si la demande couvre plusieurs écrans. |
 | `security-audit` | Avant un commit/PR/déploiement, ou avant d'ajouter/monter/remplacer une dépendance — secrets, hygiène repo, vérification CVE de version (OSV.dev) et anti-swap aveugle. |
+| `config-audit` | Sur demande, ou en suggestion avant `deploy-checklist`/avant d'ajouter un serveur MCP — audite `.claude/` lui-même (hooks, `settings.json`, serveurs MCP), pas le code du projet. Rapport seul, jamais bloquant. |
 | `sandbox-pretest` | Avant un premier déploiement, une dépendance nouvelle, ou l'exécution de code de provenance incertaine — exécution en environnement isolé (Docker si dispo). |
 | `deploy-checklist` | Avant de déployer ou mettre à jour un service réel — recherche `find-skills` ciblée sur la stack réelle avant la checklist. |
 | `skill-builder` | Pour créer une nouvelle skill du socle, ou dériver une version plus légère (ex: un socle "études uniquement"). |
@@ -213,13 +217,18 @@ s'appuient dessus plutôt que de réinventer leur logique.
 
 ## Ce qui est volontairement absent (pour l'instant)
 
-Pas de système de mémoire/apprentissage continu façon ECC, pas de couche sécurité
-multi-agents, pas de règles par langage séparées. Le socle reste à 15 skills (11→15 en
-V1.12 : `graphify`, `harnais-stats`, `checkpoint-pause`, `checkpoint-resume`, toutes
-ajoutées sur demande explicite de l'utilisateur via `skill-builder`, pas une dérive
-automatique) + 2 agents + 9 hooks (+ 1 statusline, `update-check.js` ajouté en V1.12)
-par choix délibéré — à faire évoluer via `skill-builder` si le besoin s'en fait sentir,
-pas par défaut. Pour toute évolution du
+Pas de système de mémoire/apprentissage continu à score de confiance façon ECC
+("instincts", auto-génération de skills), pas de couche sécurité multi-agents continue
+façon AgentShield, pas de règles par langage séparées, pas de support multi-harnais. Une
+version réduite de deux de ces idées a été ajoutée en V1.15 sur demande explicite de
+l'utilisateur — `LESSONS.md` (mémoire project-local simple, sans scoring) et
+`config-audit` (audit ponctuel de configuration, sans scan continu) — voir `SOURCES.md`
+pour le détail du périmètre retenu/écarté. Le socle reste à 16 skills (11→15 en V1.12 :
+`graphify`, `harnais-stats`, `checkpoint-pause`, `checkpoint-resume` ; 15→16 en V1.15 :
+`config-audit` ; toutes ajoutées sur demande explicite de l'utilisateur via
+`skill-builder`, pas une dérive automatique) + 2 agents + 9 hooks (+ 1 statusline,
+`update-check.js` ajouté en V1.12) par choix délibéré — à faire évoluer via
+`skill-builder` si le besoin s'en fait sentir, pas par défaut. Pour toute évolution du
 socle lui-même (scripts d'auto-amélioration, adaptation à un autre modèle, durcissement
 entreprise, futur mécanisme de checkpoint/rollback) : lis `EVOLUTION.md` d'abord — il
 fixe les invariants qu'aucune évolution ne doit affaiblir.

@@ -5,7 +5,7 @@ d'école, projet perso, service déployé pour soi ou ses proches) avec des gard
 sécurité et une méthode de travail déjà en place. Ce dépôt n'est **pas** un projet
 applicatif : c'est le moule que l'on copie au départ de chaque nouveau projet.
 
-Version courante : **V1.14** — installable en une ligne (voir ci-dessous) et mettable à
+Version courante : **V1.15** — installable en une ligne (voir ci-dessous) et mettable à
 jour depuis le chat Claude Code lui-même (skill `update-harnais`, voir plus bas), avec
 un rappel automatique en début de session si une version plus récente est publiée
 (hook `update-check.js`, jamais d'application automatique).
@@ -17,6 +17,7 @@ un rappel automatique en début de session si une version plus récente est publ
 | `README.md` (ce fichier) | Toi (humain) | Notice d'utilisation du socle. |
 | `CLAUDE.md` | Claude | Règles non négociables + routage des skills, chargé à chaque session. |
 | `SESSION.md` | Les deux | État courant du travail, injecté automatiquement au démarrage de session. |
+| `LESSONS.md` | Les deux | Mémoire project-local versionnée avec git (V1.15) — leçons non-évidentes accumulées au fil du projet, maintenue par `session-checkpoint`. |
 | `MONITORING.csv` | Toi | Journal daté des incidents/pertinence du socle sur ce projet — comparable entre projets, alimenté automatiquement (incidents) ou avec ton accord (relevés de pertinence sur demande, skill `harnais-stats`). |
 | `SOURCES.md` | Toi | D'où viennent les choix de conception (sources + décisions propres). |
 | `EVOLUTION.md` | Les deux | Invariants à respecter pour toute évolution du socle lui-même. |
@@ -49,10 +50,10 @@ Ce que fait l'installeur (`install/apply.js`, invoqué par les deux scripts) :
 | Fichier | Traitement |
 |---|---|
 | `.claude/hooks/`, `.claude/skills/`, `.claude/agents/`, `EVOLUTION.md` | Copiés (possédés par le socle). En cas de mise à jour d'un fichier modifié : sauvegarde `.harnais-bak` puis remplacement. |
-| `SESSION.md`, `MONITORING.csv` | Créés vierges depuis un template — **jamais touchés** s'ils existent déjà. |
+| `SESSION.md`, `MONITORING.csv`, `LESSONS.md` | Créés vierges depuis un template — **jamais touchés** s'ils existent déjà. |
 | `CLAUDE.md`, `.gitignore` | Fusion additive entre marqueurs `harnais:` — un CLAUDE.md existant (BMAD, GSD…) est conservé intact, le bloc socle s'ajoute à la fin. |
 | `.claude/settings.json` | Fusion JSON : hooks ajoutés à côté des existants, `permissions.deny` par union, anti-bypass forcé — jamais de retrait. |
-| `README.md`, `SOURCES.md`, `SESSION.md`/`MONITORING.csv` du socle, `install.*` | Jamais installés (documentation du socle, pas du projet). |
+| `README.md`, `SOURCES.md`, `SESSION.md`/`MONITORING.csv`/`LESSONS.md` du socle, `install.*` | Jamais installés (documentation du socle, pas du projet). |
 
 L'installation est **idempotente** : relancer le one-liner met à jour le socle
 (remplacement entre marqueurs) sans dupliquer ni écraser ce qui appartient au projet.
@@ -116,13 +117,19 @@ en cours) :
   les fichiers secrets (`.env*`, `*.pem`, clés SSH, états Terraform, `~/.ssh`,
   `~/.aws`…), et `disableBypassPermissionsMode` neutralise le mode
   `--dangerously-skip-permissions`.
-- **15 skills** : `onboard-project`, `dev-cycle`, `security-audit`, `sandbox-pretest`,
-  `deploy-checklist`, `skill-builder`, `session-checkpoint`, `checkpoint-pause`,
-  `checkpoint-resume`, `update-harnais`, `find-skills`, `harnais-report`,
-  `harnais-stats`, `perplexity-research`, `graphify` — le routage détaillé est dans
-  `CLAUDE.md`.
+- **16 skills** : `onboard-project`, `dev-cycle`, `security-audit`, `config-audit`,
+  `sandbox-pretest`, `deploy-checklist`, `skill-builder`, `session-checkpoint`,
+  `checkpoint-pause`, `checkpoint-resume`, `update-harnais`, `find-skills`,
+  `harnais-report`, `harnais-stats`, `perplexity-research`, `graphify` — le routage
+  détaillé est dans `CLAUDE.md`.
 - **2 sous-agents** : `code-reviewer` (revue large sans polluer le contexte principal),
   `debugger` (root-cause d'un bug, idem).
+- **`LESSONS.md`** (V1.15) — mémoire project-local versionnée avec git, inspirée du
+  "Memory Vault" d'ECC mais volontairement simple (pas de score de confiance, pas
+  d'auto-génération de skill) : des leçons non-évidentes accumulées au fil du projet,
+  maintenues par `session-checkpoint`. Différente de `.claude/session-log.md` (hors git)
+  et de la mémoire native de Claude Code (globale au compte, pas versionnée avec le
+  projet).
 
 ## Notice d'utilisation au quotidien
 
@@ -138,12 +145,16 @@ en cours) :
    le sous-agent `debugger` ; pour relire un module entier, `code-reviewer`.
 3. **Avant un commit ou un déploiement** : `security-audit` (routine légère secrets +
    hygiène repo). Avant un premier déploiement ou du code de provenance douteuse :
-   `sandbox-pretest`. Avant la mise en prod : `deploy-checklist`.
-4. **Après chaque étape significative** (ou avant de fermer) : « fais le point » —
-   la skill `session-checkpoint` réécrit `SESSION.md` et ajoute une entrée datée +
-   ID de session dans `.claude/session-log.md`. Séparément, `harnais-stats` alimente
-   `MONITORING.csv` (incidents constatés en cours de route, ou relevés de pertinence sur
-   demande avec ton accord explicite) — pensé pour être comparé entre plusieurs projets.
+   `sandbox-pretest`. Avant la mise en prod : `deploy-checklist`. Pour auditer la
+   configuration de l'agent lui-même (hooks, `settings.json`, serveurs MCP) plutôt que le
+   code : `config-audit`.
+4. **Après chaque étape significative, et systématiquement avant de fermer** : « fais le
+   point » — la skill `session-checkpoint` réécrit `SESSION.md`, ajoute une entrée datée
+   + ID de session dans `.claude/session-log.md`, et — seulement si quelque chose de
+   non-évident a été appris — une entrée dans `LESSONS.md` (mémoire project-local
+   versionnée avec git). Séparément, `harnais-stats` alimente `MONITORING.csv` (incidents
+   constatés en cours de route, ou relevés de pertinence sur demande avec ton accord
+   explicite) — pensé pour être comparé entre plusieurs projets.
 
 ### Arrêt manuel / reprise
 
@@ -189,5 +200,5 @@ existe encore). Le retour arrière sur le code passe par git (un commit par évo
 Toute modification du socle lui-même (nouvelle skill, durcissement, dérivation d'une
 variante plus légère) passe par la skill `skill-builder` et doit respecter les
 invariants de `EVOLUTION.md` — y compris tenir cette notice à jour (`README.md`) quand
-un changement touche à l'usage visible du socle. Le périmètre actuel (15 skills, 2
+un changement touche à l'usage visible du socle. Le périmètre actuel (16 skills, 2
 agents, 9 hooks) est un choix délibéré : on n'ajoute que si le besoin est démontré.

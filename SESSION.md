@@ -9,84 +9,38 @@
 
 ## Niveau / statut actuel
 
-**V1.12 commitée (`c5608bc`), taguée (`v1.12`) et poussée** (les cinq chantiers de la
-session précédente : `graphify`, `update-check.js`, `STATS.md`/`harnais-stats`,
-rattrapage README, `checkpoint-pause`/`checkpoint-resume`).
+**V1.15 implémentée, pas encore commitée/taguée/poussée** — trois chantiers inspirés
+d'ECC (github.com/affaan-m/ecc), périmètre scopé explicitement avec l'utilisateur :
+1. **`LESSONS.md`** : mémoire persistante project-local versionnée avec git.
+2. **`config-audit`** : nouvelle skill, version réduite d'AgentShield (audit de
+   `.claude/` lui-même, jamais bloquant).
+3. **Détection du gestionnaire de paquets** (dont `uv`) dans `onboard-project`.
 
-**V1.13 commitée (`70a0681`, `9d82e3b`), taguée (`v1.13`) et poussée** — deux chantiers
-cette session, partis d'un rapport d'incident utilisateur réel :
-1. **Fix du hang `install.ps1`** (`70a0681`).
-2. **Refonte `STATS.md` → `MONITORING.csv`** (`9d82e3b`).
-
-**V1.14 commitée (`74bd2c2`, `da7d225`), taguée (`v1.14`) et poussée** — deux
-chantiers, tous deux partis d'un rapport d'incident utilisateur réel :
-1. **Arrêt dur crédits 95% + arrêt propre des agents en arrière-plan** (`74bd2c2`).
-2. **Fix de la boucle infinie `update-harnais`** (`da7d225`) : `.claude/harnais.version`
-   ne progressait jamais au-delà de v1.12 malgré une "mise à jour" annoncée réussie.
+(Historique V1.12→V1.14 : voir `.claude/session-log.md` et `SOURCES.md`.)
 
 ## Fait
 
-- **Fix hang `install.ps1`** : un rapport d'incident décrivait `install.ps1` bloqué
-  indéfiniment (`node.exe` à 0% CPU, aucune sortie) lors d'un `update-harnais` réel.
-  L'investigation a écarté les deux hypothèses du rapport (pas d'auto-suppression du
-  script, pas de capture de sortie interne — `install.ps1` héritait déjà la console) ;
-  cause probable non confirmable à distance (antivirus/EDR local). L'invocation node
-  passe de l'opérateur `&` à `System.Diagnostics.Process` direct (après avoir écarté
-  `Start-Process -PassThru`, dont l'`.ExitCode` s'est révélé peu fiable une fois le
-  process terminé), qui sonde la progression et affiche après 60s un avertissement avec
-  la commande de contournement exacte. `update-harnais/SKILL.md` documente ce problème
-  connu. **Vérifié** bout-en-bout (chemin heureux + chemin d'erreur) sur un dossier de
-  test. Détail complet dans `SOURCES.md` § "V1.13".
-- **`STATS.md` → `MONITORING.csv`** : deux défauts remontés par l'utilisateur à l'usage —
-  format markdown à table réécrite peu adapté à un journal d'événements, et
-  déclenchement de `harnais-stats` sans règle claire pour le cas où Claude remarque un
-  problème de lui-même. Nouveau fichier CSV **append-only** (une ligne = un événement
-  daté, jamais réécrite — même idiome que `.claude/harnais-metrics.jsonl`), même statut
-  create-only que l'ancien `STATS.md` dans `apply.js`. `harnais-stats` gagne deux modes :
-  **automatique** (Claude remarque un incident/succès notable en cours de travail —
-  annonce en une phrase puis écrit directement, sans confirmation bloquante) et
-  **interactif** (demande ouverte explicite — déroulé inchangé : proposer, agréger,
-  noter la pertinence, confirmer avant d'écrire). Colonne `projet` dérivée
-  automatiquement du nom de dossier, jamais demandée. Anciens `STATS.md`/
-  `templates/STATS.md` supprimés (squelettes vides, aucune perte). `CLAUDE.md`,
-  `README.md` (3 endroits), `SOURCES.md` (nouvelle entrée "V1.13") mis à jour. **Vérifié**
-  via `apply.js` sur un dossier de test (création + idempotence) et
-  `test-guard.js` (138/138, non affecté).
-- **Arrêt dur crédits : agents en arrière-plan** : diagnostic confirmé par lecture du
-  code (`sameSessionSnapshot` dans `hard-stop-guard.js` exige que le `session_id` de
-  l'outil corresponde au snapshot statusline — un agent en tâche de fond n'en a pas,
-  donc structurellement invisible au watchdog, ne peut jamais s'auto-arrêter). Plutôt
-  que de la télémétrie par agent (n'aurait pas de sens, les crédits sont un compteur de
-  compte), le correctif est côté orchestration : whitelist étendue à
-  `ListAgents`/`SendMessage`/`TaskStop` pendant l'arrêt dur, `blockMessage()` donne la
-  séquence (prévenir chaque agent actif → finir le checkpoint → `TaskStop` en filet de
-  sécurité). Seuil crédits `CREDIT_HARD_STOP_PCT` remonté 90%→95% (décision utilisateur,
-  marge dédiée à cette séquence). Limite assumée avec l'utilisateur (question posée) :
-  best-effort, pas garanti à 100% — convention complémentaire documentée dans
-  `CLAUDE.md` (tâche multi-parties confiée à un sous-agent → lui demander de
-  checkpointer au fil de l'eau dans `session-log.md`, pas seulement en fin de tâche).
-  Toutes les mentions "90%" mises à jour en cohérence (6 fichiers hooks + README +
-  CLAUDE.md). **Vérifié** : `test-watchdogs.js` mis à jour (nouvelle frontière 94/95%,
-  nouveau test whitelist ListAgents/SendMessage/TaskStop vs Bash toujours bloqué,
-  129/129) + `test-guard.js` (138/138) + inspection manuelle du message généré. Détail
-  complet dans `SOURCES.md` § "V1.14".
-- **Fix boucle infinie `update-harnais`** : rapport utilisateur — `update-harnais`
-  annonçait une transition v1.12 → v1.13/v1.14 et un redémarrage de session, mais après
-  redémarrage la version restait v1.12, en boucle. Cause racine confirmée dans le code :
-  `install/apply.js` écrivait `.claude/harnais.version` depuis une constante `VERSION`
-  hardcodée (`"1.12"`), jamais remontée au moment de tagger `v1.13`
-  (`git show v1.13:install/apply.js` contenait encore `"1.12"`) — `install.ps1`/
-  `install.sh` résolvaient pourtant le bon tag GitHub mais ne le transmettaient jamais à
-  `apply.js`. Correctif structurel : `apply.js` dérive désormais `VERSION` du tag
-  réellement résolu (nouvel argument `--tag`, transmis par `install.ps1`/`install.sh`),
-  avec repli sur un nouveau fichier `VERSION` racine uniquement en mode dev local sans
-  tag — rend cette classe de bug impossible plutôt que de corriger le chiffre une fois
-  de plus (règle déjà documentée dans `EVOLUTION.md` invariant 4, pas appliquée
-  mécaniquement lors du tag v1.13). `EVOLUTION.md`, `README.md` (bandeau de version) et
-  `update-harnais/SKILL.md` mis à jour en cohérence. **Vérifié** : scénario exact du bug
-  rejoué (`apply.js` sur une cible à `"1.12"` + `--tag v1.14` → écrit `"1.14"`),
-  idempotence (second run → `déjà à jour`), repli sans `--tag`, `install.sh` réel exécuté
-  end-to-end contre le tag `v1.14` publié sur GitHub, `test-guard.js` (138/138) inchangé.
+- **`LESSONS.md`** : nouveau fichier (racine + `templates/`) — mémoire persistante
+  project-local versionnée avec git, inspirée du Memory Vault d'ECC mais sans score de
+  confiance ni auto-génération de skill. `session-checkpoint` la maintient,
+  systématiquement en fin de session, uniquement si une leçon non-évidente a émergé.
+  Choix explicite de ne pas ajouter de hook `Stop` dédié (jugement sémantique, pas
+  déterministe) — automatisation côté skill/règle CLAUDE.md. Détail complet dans
+  `SOURCES.md` § "V1.15".
+- **`config-audit`** (nouvelle skill) : version réduite d'AgentShield (ECC) — audite
+  `.claude/` lui-même (settings.json, hooks, MCP, surface d'injection de prompt), jamais
+  bloquant, complémentaire à `security-audit` (code/dépendances) sans le dupliquer.
+  Dry-run sur ce repo lui-même : a révélé puis corrigé un faux positif potentiel (hooks
+  invoqués indirectement comme `resume-after-reset.js`, et `.claude/hooks/lib/*.js`
+  signalés à tort comme orphelins par un check naïf).
+- **Détection du gestionnaire de paquets** dans `onboard-project` (dont `uv` pour
+  Python) : petit ajout à l'étape de détection de stack existante.
+- Compte skills : 15 → 16 (`config-audit`). `CLAUDE.md`, `README.md`, `SOURCES.md`,
+  `VERSION` mis à jour en cohérence.
+- **Vérifié** : les 6 suites de tests hooks existantes inchangées (138/61/32/30/21/129
+  OK — aucun hook touché) ; `install/apply.js` testé sur dossier scratch vierge
+  (`LESSONS.md` créé) + double exécution (idempotent) + dossier avec `LESSONS.md`
+  préexistant (jamais écrasé).
 
 ## En cours / bloqué
 
@@ -111,6 +65,11 @@ Rien de bloquant.
 6. Futur skill "checkpoint" (retour arrière inter-sessions) : cadrage dans
    `EVOLUTION.md`, à construire via `skill-builder` quand le besoin se présente.
 7. Optimisation des tokens : chantier volontairement reporté par l'utilisateur.
+8. **V1.15 à commiter/pousser, et taguer `v1.15` après confirmation de l'utilisateur**
+   (mémoire opérée uniquement par le jugement de Claude dans `session-checkpoint` — pas
+   encore observée en usage réel sur une session de longueur normale).
+9. Repo tiers d'économie de tokens évoqué par l'utilisateur pendant la discussion V1.15 :
+   nom non retrouvé sur le moment, à reprendre si l'utilisateur s'en souvient.
 
 ## Problèmes rencontrés / limites connues
 
@@ -144,6 +103,16 @@ Rien de bloquant.
   (découvert en corrigeant le hang `install.ps1`).
 
 ## Dernier checkpoint
+
+2026-10-02 — **V1.15 implémentée, pas encore commitée** : trois chantiers inspirés d'ECC
+scopés explicitement avec l'utilisateur (après recherche `WebFetch` sur le repo source) —
+`LESSONS.md` (mémoire project-local versionnée avec git, maintenue par
+`session-checkpoint` en fin de session), `config-audit` (AgentShield réduit, jamais
+bloquant), détection du gestionnaire de paquets dans `onboard-project`. 6 suites de
+tests hooks inchangées (138/61/32/30/21/129 OK), `apply.js` testé sur dossier scratch
+(création + idempotence + non-écrasement d'un `LESSONS.md` existant). Détail complet
+dans `SOURCES.md` § "Décisions propres — V1.15". Session :
+7e5cd61c-df2f-41b5-a493-222f6973007a.
 
 2026-09-17 — **V1.14 taguée/poussée** : fix de la boucle infinie `update-harnais`
 (`VERSION` dérivée du tag `--tag` réellement résolu par `install.ps1`/`install.sh` au

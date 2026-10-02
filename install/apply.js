@@ -396,6 +396,17 @@ if (fs.existsSync(monitoringDst)) {
   report("créé", "MONITORING.csv");
 }
 
+// b) Create-only : LESSONS.md depuis le template (jamais écrasé — mémoire
+// project-local versionnée avec git, V1.15, alimentée ensuite par
+// session-checkpoint).
+const lessonsDst = path.join(targetDir, "LESSONS.md");
+if (fs.existsSync(lessonsDst)) {
+  report("conservé (existe déjà)", "LESSONS.md");
+} else {
+  fs.copyFileSync(path.join(sourceDir, "templates", "LESSONS.md"), lessonsDst);
+  report("créé", "LESSONS.md");
+}
+
 // c) Fusions additives.
 const claudeBlock = `${CLAUDE_START}\n${readText(path.join(sourceDir, "CLAUDE.md")).replace(/\r\n/g, "\n").trimEnd()}\n${CLAUDE_END}`;
 mergeMarkedBlock(path.join(targetDir, "CLAUDE.md"), "CLAUDE.md", claudeBlock, CLAUDE_START_RE, CLAUDE_END, null);
