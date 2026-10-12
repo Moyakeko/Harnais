@@ -5,7 +5,7 @@ d'école, projet perso, service déployé pour soi ou ses proches) avec des gard
 sécurité et une méthode de travail déjà en place. Ce dépôt n'est **pas** un projet
 applicatif : c'est le moule que l'on copie au départ de chaque nouveau projet.
 
-Version courante : **V1.15** — installable en une ligne (voir ci-dessous) et mettable à
+Version courante : **V1.16** — installable en une ligne (voir ci-dessous) et mettable à
 jour depuis le chat Claude Code lui-même (skill `update-harnais`, voir plus bas), avec
 un rappel automatique en début de session si une version plus récente est publiée
 (hook `update-check.js`, jamais d'application automatique).
@@ -94,7 +94,7 @@ en cours) :
   destructrice sans confirmation, pas de « c'est fait » sans vérification réelle,
   pédagogie du pourquoi, principes Karpathy (réflexion avant exécution), `SESSION.md`
   maintenu à jour.
-- **9 hooks** (`.claude/hooks/`) + une **statusline** :
+- **10 hooks** (`.claude/hooks/`) + une **statusline** :
   - `guard-dangerous-commands.js` — bloque par exit code, même en auto-approve,
     5 catégories : suppression récursive large, destruction de disque, git destructif,
     code téléchargé pipé dans un shell, fichiers secrets via le shell. Batterie de
@@ -102,6 +102,9 @@ en cours) :
   - `session-start-inject.js` — injecte `SESSION.md` + l'ID de session au démarrage.
   - `update-check.js` — vérifie (1×/24h max, jamais bloquant) si une version plus
     récente du socle est publiée sur GitHub ; propose seulement, n'applique jamais.
+  - `graphify-check.js` (V1.16) — rappel local (1×/7j max, jamais bloquant, aucun
+    appel réseau) si le repo semble volumineux/inconnu et que `graphify` n'a jamais
+    été utilisé ici ; propose seulement, n'installe/ne lance jamais rien.
   - `precompact-safety-net.js` — filet de sécurité avant compactage du contexte.
   - `notify-desktop.js` — vrais toasts Windows (fin de tâche, attente d'action).
   - `statusline.js` — capteur du % de contexte et des crédits, alimente les deux
@@ -201,4 +204,4 @@ Toute modification du socle lui-même (nouvelle skill, durcissement, dérivation
 variante plus légère) passe par la skill `skill-builder` et doit respecter les
 invariants de `EVOLUTION.md` — y compris tenir cette notice à jour (`README.md`) quand
 un changement touche à l'usage visible du socle. Le périmètre actuel (16 skills, 2
-agents, 9 hooks) est un choix délibéré : on n'ajoute que si le besoin est démontré.
+agents, 10 hooks) est un choix délibéré : on n'ajoute que si le besoin est démontré.

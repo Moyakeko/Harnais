@@ -92,6 +92,16 @@ Skills globales déjà disponibles dans le harnais Claude Code (ne pas dupliquer
 courant), `/security-review` (revue de sécurité approfondie). Les skills ci-dessus
 s'appuient dessus plutôt que de réinventer leur logique.
 
+Si le plugin global `caveman` est disponible dans l'environnement (hors socle, jamais
+versionné dans ce dépôt), il est pertinent en mode compression pour des sessions de
+code pur — jamais pour une session à dominante rédaction/pédagogie, où la règle n°4
+ci-dessus (expliquer le pourquoi) prime sur la compacité. Optionnel, jamais un
+prérequis. Objectif visé sur les sessions de code : **au moins -33% de tokens de
+sortie** grâce à `caveman` + la recommandation `graphify` (V1.16, voir ci-dessous) —
+mesuré via `/caveman-stats` et suivi dans `MONITORING.csv` (voir `harnais-stats`,
+section "suivi de la dépense de token") d'une mise à jour à l'autre, pas une
+affirmation en l'air (règle n°3).
+
 ## Sous-agents
 
 | Agent | Rôle |
@@ -214,6 +224,15 @@ s'appuient dessus plutôt que de réinventer leur logique.
   publiée), jamais appliquer de mise à jour lui-même. Fail-open systématique (absence de
   `.claude/harnais.version`, timeout, erreur réseau → silence complet) ; ce dépôt (le
   socle source) n'a pas ce fichier et n'est donc jamais concerné par ce hook.
+- Le hook `graphify-check.js` (V1.16, `SessionStart`) suit le même patron
+  qu'`update-check.js` (fail-open, throttle local, jamais d'action lui-même) mais sans
+  aucun appel réseau : il compte simplement les fichiers du repo (heuristique fs, bruit
+  de dépendances exclu) pour détecter un repo volumineux/inconnu, et consulte
+  `harnais-metrics.jsonl` pour savoir si `graphify` a déjà été utilisé ici. Il ne sait
+  pas si l'outil est réellement installé sur la machine — ce serait un appel process
+  externe, hors de ce que ce hook fait par conception ; il se contente du signal fs
+  disponible. Throttle sur 7 jours, pas 24h comme `update-check.js` : ce n'est pas une
+  info qui change vite.
 
 ## Ce qui est volontairement absent (pour l'instant)
 
@@ -226,8 +245,9 @@ l'utilisateur — `LESSONS.md` (mémoire project-local simple, sans scoring) et
 pour le détail du périmètre retenu/écarté. Le socle reste à 16 skills (11→15 en V1.12 :
 `graphify`, `harnais-stats`, `checkpoint-pause`, `checkpoint-resume` ; 15→16 en V1.15 :
 `config-audit` ; toutes ajoutées sur demande explicite de l'utilisateur via
-`skill-builder`, pas une dérive automatique) + 2 agents + 9 hooks (+ 1 statusline,
-`update-check.js` ajouté en V1.12) par choix délibéré — à faire évoluer via
+`skill-builder`, pas une dérive automatique) + 2 agents + 10 hooks (+ 1 statusline,
+`update-check.js` ajouté en V1.12, `graphify-check.js` ajouté en V1.16) par choix
+délibéré — à faire évoluer via
 `skill-builder` si le besoin s'en fait sentir, pas par défaut. Pour toute évolution du
 socle lui-même (scripts d'auto-amélioration, adaptation à un autre modèle, durcissement
 entreprise, futur mécanisme de checkpoint/rollback) : lis `EVOLUTION.md` d'abord — il

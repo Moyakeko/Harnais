@@ -36,6 +36,20 @@ Colonnes à remplir pour cette ligne (voir schéma complet plus bas) : `type=inc
 (problème) ou `type=feedback` (remarque libre sans problème précis), et
 `statut_ou_pertinence` = `corrigé` / `en cours` / `non reproductible` selon le cas.
 
+### Cas particulier — suivi de la dépense de token (V1.16)
+
+Chaque fois qu'une mise à jour du socle vise explicitement la dépense de token (ex:
+V1.16 — recommandation `graphify` + note `caveman`), mesure via `/caveman-stats` (ou le
+rapport natif qu'elle localise) sur quelques tâches de code représentatives, puis
+consigne le résultat en `type=feedback`, `skill_ou_composant=caveman` (ou `graphify`
+selon le levier mesuré), `statut_ou_pertinence` = résumé chiffré court (ex: "-28% tokens
+sortie"), et `notes` = détail des tâches mesurées + avant/après. Comme `version_socle`
+est déjà renseigné sur chaque ligne, filtrer `MONITORING.csv` par
+`skill_ou_composant=caveman` donne directement la tendance de mise à jour en mise à
+jour — c'est ce qui permet de dire si l'objectif -33% progresse ou régresse, pas
+seulement s'il a été atteint une fois. Jamais de ligne sans mesure réelle (règle n°3 du
+socle) : pas de score inventé ou estimé.
+
 ## Mode interactif — demande ouverte explicite
 
 Sur "stats du projet", "harnais-stats", "documente l'usage du harnais", "fais le point

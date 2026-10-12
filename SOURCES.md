@@ -635,3 +635,52 @@ Zed/etc.), la couche de commandes slash dédiée, une couche de règles par lang
 idées mineures proposées. Un repo tiers d'économie de tokens évoqué par l'utilisateur en
 cours de discussion, nom non retrouvé sur le moment — explicitement reporté à une session
 ultérieure, pas construit à l'aveugle. Compte skills : 15 → 16 (`config-audit`).
+
+## Décisions propres — V1.16 (graphify proactif, note caveman)
+
+**Contexte** : le repo tiers d'économie de tokens reporté en V1.15 est identifié —
+`JuliusBrussee/caveman`, un plugin global déjà installé dans l'environnement Claude Code
+de l'utilisateur, mode de compression de sortie. Demande directe : réduire la dépense de
+token sur les sessions de code (objectif chiffré fixé par l'utilisateur : au moins -33%,
+« tout le monde ne peut pas se permettre l'abo le plus cher »), et faire en sorte que
+`graphify` (déjà présent depuis V1.12, mais jamais référencé par `onboard-project`) aide
+Claude à avoir une image claire du projet sans redécouverte répétée coûteuse en tokens.
+
+**Retenu — recommandation `graphify` dans `onboard-project` + hook `graphify-check.js`
+(les deux, sur demande explicite)** : une mention ponctuelle dans l'interview one-shot ne
+couvre pas le cas d'un repo onboardé puis grossi des semaines après — d'où un second
+levier, un hook `SessionStart` qui reprend le patron exact d'`update-check.js` (fail-open,
+throttle, jamais d'action lui-même) mais entièrement local : pas d'appel réseau, juste un
+comptage de fichiers borné (seuil ~200, dossiers de bruit exclus) et une vérification
+d'absence de manifeste de stack reconnu, plus une lecture bornée de
+`harnais-metrics.jsonl` pour savoir si `graphify` a déjà été utilisé sur ce projet (éviter
+de harceler quelqu'un qui s'en sert déjà). Throttle à 7 jours (pas 24h comme
+`update-check.js`) : ce n'est pas une info qui change vite. Limite assumée et documentée :
+le hook ne vérifie pas si l'outil est réellement installé sur la machine — ce serait un
+appel process externe, hors de ce qu'un hook fs-only fait par conception.
+
+**Retenu — note `caveman` dans `CLAUDE.md`, pas une skill du socle** : `caveman` reste
+hors dépôt (c'est un plugin global de l'environnement, pas quelque chose que ce socle
+possède ou distribue) — documenté comme une recommandation contextuelle, même patron que
+`perplexity-research`/`graphify` (optionnel, jamais un prérequis), pour ne pas dupliquer
+une capacité déjà disponible globalement (règle de `skill-builder`). Tension explicite
+documentée avec la règle n°4 du socle (expliquer le pourquoi prime sur la compacité en
+contexte pédagogique) : la note tranche par contexte — code pur oui, rédaction/pédagogie
+non — plutôt que par un défaut global qui aurait pu entrer en conflit avec le but
+d'apprentissage de ce socle.
+
+**Vérification de l'objectif -33%, suivie dans `MONITORING.csv`** : mesuré via
+`caveman-stats` (déjà disponible, externe au socle) en comparant les tokens de sortie sur
+2-3 tâches de code représentatives avant/après activation de `caveman` + recommandation
+`graphify` — pas une affirmation déclarée sans ce chiffre mesuré (règle n°3). Décision
+prise après la première rédaction de cette section : plutôt qu'une mesure ponctuelle
+documentée une seule fois ici, chaque mesure (à cette version et aux suivantes) devient
+une ligne `type=feedback` dans `MONITORING.csv` (`skill_ou_composant=caveman`/`graphify`,
+voir `harnais-stats`) — ce qui permet de suivre la tendance au fil des mises à jour, pas
+seulement un instantané. Première mesure : pas encore faite au moment de cette entrée —
+l'infrastructure de recommandation vient d'être posée, la mesure réelle est la prochaine
+étape.
+
+**Écarté** : automatiser l'installation de `graphify` ou l'activation de `caveman` —
+les deux restent des décisions humaines explicites, jamais déclenchées par un hook ou une
+skill elle-même (invariant `EVOLUTION.md`). Compte hooks : 9 → 10 (`graphify-check.js`).

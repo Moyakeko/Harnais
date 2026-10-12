@@ -88,6 +88,8 @@ credentials*.json
 .claude/watchdog-state.json
 # État local du hook update-check.js (throttle 24h, dernier tag connu)
 .claude/harnais-update-check.json
+# État local du hook graphify-check.js (throttle 7 jours du dernier rappel affiché)
+.claude/harnais-graphify-check.json
 # Télémétrie locale du socle (V1.10) — grossit vite, voulu, voir CLAUDE.md
 .claude/harnais-metrics.jsonl`;
 

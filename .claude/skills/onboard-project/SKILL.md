@@ -32,7 +32,15 @@ reposer les questions.
    `Pipfile.lock`→pipenv, `requirements.txt` seul→pip). Si plusieurs lockfiles
    coexistent (migration d'un gestionnaire à l'autre), signale l'ambiguïté à
    l'utilisateur plutôt que de deviner — note-le dans `PROJECT.md` une fois tranché.
-3. Pose au maximum ces questions (saute celles dont la réponse est évidente depuis le
+3. Si le repo dépasse ~200 fichiers suivis (`git ls-files | wc -l`, ou un comptage
+   équivalent excluant `node_modules`/`.git`/`venv`/`.venv`/`dist`/`build`/`target`/
+   `__pycache__`) **ou** qu'aucun manifeste de stack reconnu n'a été trouvé à l'étape
+   précédente, mentionne une fois la skill `graphify` comme option pour cartographier
+   l'architecture avant l'interview — ne l'installe ni ne la lance jamais depuis cette
+   étape (voir `graphify` pour les vérifications `security-audit`/`sandbox-pretest`
+   obligatoires avant toute première installation). Ne répète pas la suggestion si
+   l'utilisateur décline.
+4. Pose au maximum ces questions (saute celles dont la réponse est évidente depuis le
    repo ou le contexte de la conversation) :
    - Nature du projet : devoir/TP noté, projet perso, ou service à faire tourner pour de
      vrais utilisateurs (toi/proches) ?
@@ -42,20 +50,20 @@ reposer les questions.
      de prudence sur les migrations/déploiements) ?
    - Cible de déploiement envisagée, si déjà connue (sinon, laisse `à définir` — ne force
      pas une réponse, `deploy-checklist` s'en chargera le moment venu).
-4. Écris un `PROJECT.md` court à la racine (10-20 lignes, pas plus) avec ces réponses.
+5. Écris un `PROJECT.md` court à la racine (10-20 lignes, pas plus) avec ces réponses.
    Ne duplique pas ce que `CLAUDE.md` couvre déjà (les règles non négociables restent
    dans `CLAUDE.md`, pas ici).
-5. Si l'interview a fait émerger plusieurs fonctionnalités distinctes, découpe-les en
+6. Si l'interview a fait émerger plusieurs fonctionnalités distinctes, découpe-les en
    Stories (format et critère de déclenchement dans
    `references/bmad-story.md`) et ajoute-les dans une section `## Backlog (Stories)` **à
    la fin de `PROJECT.md`** (pas de fichier séparé — un seul fichier suffit, voir "Ce que
    cette skill ne fait pas"). Pour chaque Story, un appel `find-skills` en mode recherche
    pour repérer les skills candidates avant de coder.
-6. Propose un smoke test du socle fraîchement installé :
+7. Propose un smoke test du socle fraîchement installé :
    `node .claude/hooks/tests/test-guard.js` — doit afficher N/N tests OK. C'est le
    smoke test décrit dans `EVOLUTION.md` ; deux minutes, et on sait que la couche de
    garde tient sur ce projet et cette machine.
-7. Explique en une phrase à l'utilisateur ce que ça change concrètement pour la suite
+8. Explique en une phrase à l'utilisateur ce que ça change concrètement pour la suite
    (ex: "comme c'est noté avec une deadline, je vais éviter les refactors non demandés
    et prioriser un code qui marche et qui respecte l'énoncé").
 

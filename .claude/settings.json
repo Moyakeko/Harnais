@@ -28,6 +28,14 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/update-check.js\""
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/graphify-check.js\""
+          }
+        ]
       }
     ],
     "PreCompact": [
