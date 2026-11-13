@@ -6,19 +6,26 @@
 // hooks écrivent alors sur stdout ce qu'ils AURAIENT fait, ce que la
 // batterie vérifie. La vérification réelle (tâche planifiée, toasts) se
 // fait à la main, voir SESSION.md.
+// v2 : les tests ne doivent jamais écrire dans harnais-metrics.jsonl du projet réel.
+process.env.HARNAIS_NO_METRICS = "1";
+
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
 const HOOKS = path.join(__dirname, "..");
+const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "watchdog-scratch-"));
+process.on("exit", () => fs.rmSync(SCRATCH, { recursive: true, force: true }));
 
 function run(script, args, payload, extraEnv) {
   const input = payload === undefined ? "" : typeof payload === "string" ? payload : JSON.stringify(payload);
   return spawnSync("node", [path.join(HOOKS, script), ...args], {
     input,
     encoding: "utf8",
-    env: { ...process.env, WATCHDOG_DRY_RUN: "1", ...extraEnv },
+    // v2 : projet jetable par défaut — sans lui, les cas de robustesse écrivaient
+    // snapshot et état des watchdogs dans le projet courant (voire la session réelle).
+    env: { ...process.env, WATCHDOG_DRY_RUN: "1", CLAUDE_PROJECT_DIR: SCRATCH, ...extraEnv },
   });
 }
 
@@ -111,7 +118,10 @@ check("resume-after-reset sans args => exit 0", run("resume-after-reset.js", [],
 }
 
 // --- credit-watchdog : filtre d'erreur, checkpoint brut, planification ---
-{
+// Le hook ne fait rien hors Windows (voir credit-watchdog.js) : bloc sauté ailleurs.
+if (process.platform !== "win32") {
+  console.log("SKIP credit-watchdog (Windows uniquement)");
+} else {
   const dir = mkProject();
   const env = { CLAUDE_PROJECT_DIR: dir };
   const logFile = path.join(dir, ".claude", "session-log.md");

@@ -4,6 +4,9 @@
 // volumineux/inconnu (via HARNAIS_GRAPHIFY_CHECK_MOCK_FILECOUNT), le signal
 // "déjà utilisé" (via HARNAIS_GRAPHIFY_CHECK_MOCK_USED), et le throttle 7 jours.
 // Aucun vrai appel réseau ni comptage fs réel dans cette batterie (mocks).
+// v2 : les tests ne doivent jamais écrire dans harnais-metrics.jsonl du projet réel.
+process.env.HARNAIS_NO_METRICS = "1";
+
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
@@ -16,7 +19,7 @@ function run(payload, extraEnv) {
   return spawnSync("node", [path.join(HOOKS, "graphify-check.js")], {
     input,
     encoding: "utf8",
-    env: { ...process.env, ...extraEnv },
+    env: { ...process.env, HARNAIS_GRAPHIFY_CHECK_MOCK_CLI: "1", ...extraEnv },
   });
 }
 
@@ -137,6 +140,16 @@ for (const raw of [undefined, "", "{}", "pas du json"]) {
   const res = run({ session_id: "s6" }, baseEnv(dir, { HARNAIS_GRAPHIFY_CHECK_MOCK_FILECOUNT: "500" }));
   check("throttle corrompu => exit 0", res.status === 0);
   check("throttle corrompu => traité comme jamais montré (rappel émis)", res.stdout.includes("additionalContext"));
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// --- v2 : CLI graphify absent => aucun rappel, même sur un gros repo ---
+{
+  const dir = mkProject();
+  writeHarnaisVersion(dir, "1.0");
+  const res = run({ session_id: "s7" }, baseEnv(dir, { HARNAIS_GRAPHIFY_CHECK_MOCK_FILECOUNT: "500", HARNAIS_GRAPHIFY_CHECK_MOCK_CLI: "0" }));
+  check("CLI absent => exit 0", res.status === 0);
+  check("CLI absent => aucun rappel", !res.stdout.includes("additionalContext"));
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

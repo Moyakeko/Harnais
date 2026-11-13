@@ -14,6 +14,7 @@
  */
 
 const fs = require("fs");
+const { hookEnabled } = require("./hook-config");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
@@ -72,6 +73,8 @@ function formatTime(ms) {
 // pas l'environnement de la session courante, seul un argument figé traverse
 // jusqu'à l'exécution différée).
 function scheduleResume(projectDir, sessionId, resumeAtMs, claudeBinPath) {
+  // Désactivable par projet (manifeste : optional_hooks."resume-after-reset": false).
+  if (!hookEnabled("resume-after-reset", projectDir)) return false;
   const env = {
     ...process.env,
     HARNAIS_TASK_NAME: taskNameFor(sessionId),

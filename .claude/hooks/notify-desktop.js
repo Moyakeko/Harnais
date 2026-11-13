@@ -38,6 +38,7 @@ const fs = require("fs");
 const path = require("path");
 const { showToast } = require("./lib/toast");
 const { logMetric } = require("./lib/metrics");
+const { writeJsonAtomic } = require("./lib/atomic-write");
 
 const STATE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -92,10 +93,7 @@ function pruneStale(state, now) {
 // corruption si deux hooks s'exécutent quasi simultanément. La lecture reste
 // tolérante (loadState) en filet de sécurité complémentaire.
 function saveState(stateFile, state) {
-  const tmp = `${stateFile}.tmp-${process.pid}`;
-  fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(state));
-  fs.renameSync(tmp, stateFile);
+  writeJsonAtomic(stateFile, state);
 }
 
 function formatDuration(ms) {

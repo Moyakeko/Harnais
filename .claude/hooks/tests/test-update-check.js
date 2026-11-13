@@ -4,6 +4,9 @@
 // version, le throttle 24h, et la robustesse aux payloads malformés. Utilise
 // HARNAIS_UPDATE_CHECK_MOCK_TAGS/_MOCK_ERROR/_FORCE pour rester déterministe et
 // hors-ligne (aucun vrai appel réseau dans cette batterie).
+// v2 : les tests ne doivent jamais écrire dans harnais-metrics.jsonl du projet réel.
+process.env.HARNAIS_NO_METRICS = "1";
+
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");

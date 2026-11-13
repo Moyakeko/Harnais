@@ -28,6 +28,7 @@
 const fs = require("fs");
 const path = require("path");
 const { logMetric } = require("./lib/metrics");
+const { writeJsonAtomic } = require("./lib/atomic-write");
 
 const CHECK_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 const FILE_COUNT_THRESHOLD = 200;
@@ -54,10 +55,7 @@ function loadJson(file) {
 }
 
 function saveState(stateFile, state) {
-  const tmp = `${stateFile}.tmp-${process.pid}`;
-  fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(state));
-  fs.renameSync(tmp, stateFile);
+  writeJsonAtomic(stateFile, state);
 }
 
 // Comptage borné : s'arrête dès que le seuil est dépassé plutôt que de compter
@@ -120,6 +118,26 @@ function wasGraphifyUsed(projectDir) {
   }
 }
 
+// v2 : ne rappelle rien si le CLI graphify n'est pas réellement installé (audit :
+// 8 rappels affichés sur le PC pour un outil absent). Recherche dans PATH, sans
+// lancer de processus. HARNAIS_GRAPHIFY_CHECK_MOCK_CLI=1|0 pour les tests.
+function graphifyCliInstalled() {
+  const mock = process.env.HARNAIS_GRAPHIFY_CHECK_MOCK_CLI;
+  if (mock !== undefined) return mock === "1";
+  const exts = process.platform === "win32" ? ["", ".exe", ".cmd", ".bat", ".ps1"] : [""];
+  for (const dir of (process.env.PATH || "").split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      try {
+        if (fs.statSync(path.join(dir, `graphify${ext}`)).isFile()) return true;
+      } catch (e) {
+        // absent ici
+      }
+    }
+  }
+  return false;
+}
+
 async function main() {
   try {
     await readStdin(); // payload non utilisé ici, mais on vide le pipe par convention.
@@ -132,6 +150,11 @@ async function main() {
     const versionInfo = loadJson(path.join(projectDir, ".claude", "harnais.version"));
     if (!versionInfo) {
       logMetric("hook:graphify-check", "skip", "pas de harnais.version (non installé ou dépôt source)");
+      process.exit(0);
+    }
+
+    if (!graphifyCliInstalled()) {
+      logMetric("hook:graphify-check", "skip-no-cli", "");
       process.exit(0);
     }
 

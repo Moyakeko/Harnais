@@ -8,6 +8,9 @@
 // `.env.production`, `.env.test`, `.env.staging`), bare + `**/`, à la place du
 // wildcard. Ce test vérifie le contenu de la liste ET le comportement de
 // matching réel (un `.env.example` ne doit correspondre à AUCUNE règle deny).
+// v2 : les tests ne doivent jamais écrire dans harnais-metrics.jsonl du projet réel.
+process.env.HARNAIS_NO_METRICS = "1";
+
 const fs = require("fs");
 const path = require("path");
 

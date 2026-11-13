@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 // Batterie de tests pour lib/metrics.js (V1.10) et son instrumentation dans les
+// Ce fichier teste le journal lui-même : HARNAIS_NO_METRICS doit être absent ici.
+delete process.env.HARNAIS_NO_METRICS;
+
 // 9 hooks : le CLI et l'usage require() écrivent une ligne JSONL bien formée,
 // un échec d'écriture est absorbé sans jamais changer le comportement/code de
 // sortie de l'appelant, et chacun des 9 hooks produit exactement une ligne par

@@ -29,6 +29,7 @@
 const fs = require("fs");
 const path = require("path");
 const { logMetric } = require("./lib/metrics");
+const { writeJsonAtomic } = require("./lib/atomic-write");
 
 const CONTEXT_THRESHOLD_PCT = 70;
 const CREDIT_THRESHOLD_PCT = 85;
@@ -54,10 +55,7 @@ function loadJson(file) {
 }
 
 function saveState(stateFile, state) {
-  const tmp = `${stateFile}.tmp-${process.pid}`;
-  fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(state));
-  fs.renameSync(tmp, stateFile);
+  writeJsonAtomic(stateFile, state);
 }
 
 function pruneStale(state, now) {

@@ -21,6 +21,7 @@
 const fs = require("fs");
 const path = require("path");
 const { logMetric } = require("./lib/metrics");
+const { writeJsonAtomic } = require("./lib/atomic-write");
 const { compareVersions, resolveLatestTag } = require("./lib/latest-version");
 
 const REPO = "Moyakeko/Harnais";
@@ -46,10 +47,7 @@ function loadJson(file) {
 }
 
 function saveState(stateFile, state) {
-  const tmp = `${stateFile}.tmp-${process.pid}`;
-  fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(state));
-  fs.renameSync(tmp, stateFile);
+  writeJsonAtomic(stateFile, state);
 }
 
 // Mocks de test (patron *_DRY_RUN déjà en usage dans ce socle) : quand
@@ -114,11 +112,15 @@ async function main() {
       process.exit(0);
     }
 
+    // v2 : un retard de version majeure (ex. projet resté en v1.x) est signalé
+    // explicitement — l'audit a trouvé un projet resté en v1.8.
+    const major = (v) => parseInt(String(v).split(".")[0], 10) || 0;
+    const majorGap = major(latestVersion) - major(installedVersion);
     const message =
-      `Le socle Harnais installé sur ce projet est en version v${installedVersion} ; ` +
-      `la dernière version publiée est v${latestVersion}. Signale-le à l'utilisateur en ` +
-      `début de conversation et propose de lancer la skill update-harnais — ne lance ` +
-      `jamais la mise à jour toi-même sans confirmation explicite.`;
+      `Harnais en retard sur ce projet : v${installedVersion} installée, v${latestVersion} publiée` +
+      (majorGap > 0 ? ` (retard de version majeure)` : ``) +
+      `. Signale-le en une ligne en début de réponse et propose la skill update-harnais ; ` +
+      `ne lance pas la mise à jour sans accord explicite.`;
 
     process.stdout.write(
       JSON.stringify({

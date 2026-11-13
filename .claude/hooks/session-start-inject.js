@@ -14,6 +14,33 @@ const fs = require("fs");
 const path = require("path");
 const { logMetric } = require("./lib/metrics");
 
+// v2 : plafond d'injection. SESSION.md doit rester un pointeur d'état court ;
+// au-delà, seul le début est injecté et Claude est prévenu (le fichier n'est
+// jamais modifié par ce hook).
+const MAX_INJECT_BYTES = 4096;
+const MAX_LINES = 80;
+
+function capContent(content) {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const lineCount = content.endsWith("\n") ? lines.length - 1 : lines.length;
+  const bytes = Buffer.byteLength(content, "utf8");
+  const notes = [];
+  let body = content;
+  if (bytes > MAX_INJECT_BYTES) {
+    // Coupe sur une frontière de caractère puis de ligne, sans dépasser le plafond.
+    let cut = Buffer.from(content, "utf8").subarray(0, MAX_INJECT_BYTES).toString("utf8");
+    cut = cut.replace(/\uFFFD$/, "");
+    const lastNl = cut.lastIndexOf("\n");
+    if (lastNl > 0) cut = cut.slice(0, lastNl + 1);
+    body = cut;
+    notes.push(`SESSION.md tronqué à l'injection (${bytes} octets, plafond ${MAX_INJECT_BYTES}) : lis la suite seulement si tu en as besoin.`);
+  }
+  if (lineCount > MAX_LINES) {
+    notes.push(`SESSION.md fait ${lineCount} lignes (> ${MAX_LINES}) : resserre-le à l'état courant au prochain checkpoint (skill session-checkpoint).`);
+  }
+  return { body, notes, truncated: bytes > MAX_INJECT_BYTES, lineCount, bytes };
+}
+
 function readStdin() {
   return new Promise((resolve) => {
     let data = "";
@@ -43,6 +70,7 @@ async function main() {
     // Pas de SESSION.md : on injecte quand même le session ID ci-dessous.
   }
 
+  const capped = capContent(content);
   const sessionId = payload.session_id || "inconnu";
   const header =
     `Session Claude Code courante : ${sessionId}\n` +
@@ -55,12 +83,17 @@ async function main() {
       suppressOutput: true,
       hookSpecificOutput: {
         hookEventName: "SessionStart",
-        additionalContext: header + content,
+        additionalContext:
+          header + capped.body + (capped.notes.length ? `\n\n[harnais] ${capped.notes.join("\n[harnais] ")}\n` : ""),
       },
     })
   );
-  logMetric("hook:session-start-inject", "session-start", content ? "SESSION.md injecté" : "SESSION.md absent");
+  logMetric("hook:session-start-inject", "session-start", content
+      ? `SESSION.md injecté (${capped.bytes} o, ${capped.lineCount} l.${capped.truncated ? ", tronqué" : ""})`
+      : "SESSION.md absent");
   process.exit(0);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { capContent, MAX_INJECT_BYTES, MAX_LINES };

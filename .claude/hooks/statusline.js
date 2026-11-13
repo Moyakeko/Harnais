@@ -27,6 +27,7 @@
 const fs = require("fs");
 const path = require("path");
 const { logMetric } = require("./lib/metrics");
+const { writeJsonAtomic } = require("./lib/atomic-write");
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -91,10 +92,7 @@ async function main() {
       seven_day: sevenDay,
     };
     const snapshotFile = path.join(projectDir, ".claude", "statusline-snapshot.json");
-    const tmp = `${snapshotFile}.tmp-${process.pid}`;
-    fs.mkdirSync(path.dirname(snapshotFile), { recursive: true });
-    fs.writeFileSync(tmp, JSON.stringify(snapshot));
-    fs.renameSync(tmp, snapshotFile);
+    writeJsonAtomic(snapshotFile, snapshot);
   } catch (e) {
     // Le capteur est best-effort : l'affichage doit sortir quand même.
   }

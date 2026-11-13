@@ -15,7 +15,14 @@ const path = require("path");
 
 const MAX_DETAIL_LEN = 200;
 
+// HARNAIS_NO_METRICS=1 : aucune écriture (posé par les suites de tests, qui
+// polluaient le journal réel du projet ; utilisable aussi à la main).
+function metricsDisabled() {
+  return process.env.HARNAIS_NO_METRICS === "1";
+}
+
 function logMetric(source, category, detail) {
+  if (metricsDisabled()) return false;
   try {
     const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
     const file = path.join(projectDir, ".claude", "harnais-metrics.jsonl");
@@ -43,4 +50,4 @@ if (require.main === module) {
   process.exit(0);
 }
 
-module.exports = { logMetric };
+module.exports = { logMetric, metricsDisabled };

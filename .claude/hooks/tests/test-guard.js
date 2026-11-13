@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Batterie de tests pour guard-dangerous-commands.js — exécute le hook comme
 // le ferait Claude Code (payload JSON sur stdin) et vérifie l'exit code.
+// v2 : les tests ne doivent jamais écrire dans harnais-metrics.jsonl du projet réel.
+process.env.HARNAIS_NO_METRICS = "1";
+
 const { spawnSync } = require("child_process");
 const path = require("path");
 
