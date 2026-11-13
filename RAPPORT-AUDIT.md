@@ -9,12 +9,12 @@ Légende : **V** = vérifié par une preuve lue ou une commande · **S** = suppo
 
 ## 1. Résumé
 
-1. **PC injoignable** : les 15 sessions Remote Control du PC sont hors ligne. L'audit du harnais repose sur GitHub, les copies serveur et 37 transcripts serveur. L'usage réel sur le PC est non vérifié.
+1. **Sources** : GitHub, copies serveur, 37 transcripts serveur, puis 4 sessions du PC interrogées en lecture seule (34 transcripts, 33 624 événements de métriques). Les compléments du PC sont au §7, qui prime sur les sections 2 à 4.
 2. **Le harnais coûte 9 000 à 16 000 tokens avant le premier message** : CLAUDE.md fait 254 lignes, dont environ 55 % d'historique de versions et de description interne des hooks.
 3. **Presque rien n'est appelé** : sur le serveur en 11 jours, 1 skill du harnais sur 16 a servi (`session-checkpoint`), 0 agent, et MONITORING.csv est vide dans les 4 projets.
 4. **Les hooks et `permissions.deny` sont la partie qui marche** : 7 vrais blocages utiles (3 `push` destructifs, 4 lectures de secret).
 5. **Plusieurs règles fabriquent les questions et les réserves** : « pose la question », « pédagogie plutôt que vitesse », audit de sécurité avant tout outil tiers, Caveman explicitement subordonné, ECC déclaré « volontairement absent ».
-6. **Les skills tiers ne se déclenchent pas** pour trois raisons : Caveman et Ponytail tiennent par les hooks de leur plugin, perdus si on les copie comme simples skills ; ECC apporte 314 skills, soit plus de 10 fois le budget de la liste ; et le harnais les contredit.
+6. **Les skills tiers ne se déclenchent pas à cause de leur installation** (vérifié sur le PC) : Ponytail, installé comme plugin avec ses hooks, fonctionne ; Caveman, copié en simples skills sans hooks, n'a jamais été appelé ; Graphify n'est pas installé ; ECC est copié en bloc dans un projet (308 skills). Le harnais les contredit en plus.
 7. **Harnais v2 proposé** : CLAUDE.md de 60 lignes maximum (comportement et ton), le reste en hooks, 3 skills gardés, et un manifeste par projet qui installe les tiers comme plugins, avec leurs hooks.
 8. **Nuance sur « le serveur marche sans harnais »** : les sessions manager n'ont pas de harnais, mais les 4 projets serveur ont le harnais v1.16 et ses hooks tournent.
 9. **Serveur** : manager et workers vivent dans le conteneur du Hub. Un redéploiement du Hub tue tout, les workers ne sont pas isolés, la surveillance meurt avec la session manager, et aucune sauvegarde n'a été trouvée.
@@ -406,5 +406,81 @@ Les étapes 0 à 7 peuvent être menées par le manager seul. L'étape 8 demande
 **Non vérifiable depuis le serveur**
 - Sur le PC : transcripts, métriques, skills et plugins installés, `.claude/` de Vlad_Arko (ignoré par git), usage réel de `deploy-checklist`, `update-harnais`, `credit-watchdog`.
 - Sur l'hôte : version et services de CasaOS, configuration SSH, état et règles Tailscale, pare-feu, utilisateurs et sudoers, tâches planifiées, santé des disques.
+
+## 7. Compléments vérifiés sur le PC (ajout du 2026-11-13, après la première version)
+
+Le PC est revenu en ligne après la première version de ce rapport. Quatre sessions Claude Code du PC ont répondu à une demande en lecture seule (aucune modification, aucun commit). Leurs chiffres sont rapportés par elles et n'ont pas été recomptés par le manager. **Cette section prime sur les sections 2 à 4 quand elles se contredisent.**
+
+### 7.1 Sources
+
+| Session du PC | Projet | Harnais |
+|---|---|---|
+| instagram-tiktok-verification-plan | Commentateur | **v1.8** |
+| fluttering-iverson | cesi (dossier OneDrive, hors git) | v1.16 |
+| Derniers changements | commette | v1.16 |
+| modular-graham | Dapparella-ECC-Full + niveau utilisateur + tous les transcripts et métriques trouvés | v1.16 |
+
+Périmètre : 34 transcripts sur 12 projets (2026-10-14 → 2026-11-13) et 11 fichiers de métriques, 33 624 événements (2026-07-14 → 2026-11-13). Le scan des métriques s'est limité aux dossiers Bureau, Documents et projets ; le projet cesi, sous OneDrive, n'y figure pas et a ses propres chiffres (17 717 événements).
+
+### 7.2 Comment les skills tiers sont réellement installés (ce qui était « supposé » devient vérifié)
+
+| Outil | Installation réelle sur le PC | Conséquence |
+|---|---|---|
+| **Ponytail** | Plugin Claude Code, niveau utilisateur, v5.3.2, activé. Ses hooks injectent le mode à chaque session. | Fonctionne : c'est le seul tiers actif partout. 2 appels de skill. |
+| **Caveman** | `npx skills` le 2026-10-02 : 20 skills en liens symboliques dans `~/.claude/skills`. **Pas un plugin, aucun hook.** | **0 appel** en un mois. Sans son hook d'activation, le mode ne démarre que si le modèle choisit de charger un skill, ce qu'il ne fait pas. |
+| **Graphify** | **Absent** : ni CLI ni paquet. Seul le skill du harnais existe. | 8 rappels affichés par le hook, 0 usage : le skill enveloppe un outil qui n'est pas installé. |
+| **ECC** | **Pas un plugin.** Dépôt ECC cloné, puis copié dans un projet : 308 skills, 70 agents, 97 commandes et une trentaine de hooks dans `.claude/`, à côté des 13 hooks du harnais. | 0 appel de skill ou d'agent ECC. Un hook ECC (GateGuard) a bloqué la première commande de la session. Deux systèmes de hooks tournent l'un sur l'autre. |
+
+Aucun hook ni réglage de skill n'existe au niveau utilisateur en dehors de Ponytail. Aucun projet ne déclare de plugin.
+
+Cela confirme le mécanisme du §3 et le précise : **le seul tiers qui marche est celui qui est installé comme plugin avec ses hooks.** Les trois autres échouent chacun pour une raison d'installation, avant même toute question de conflit avec les règles.
+
+### 7.3 Usage réel des skills et agents sur le PC
+
+Appels de skills dans les 34 transcripts : `session-checkpoint` 28, skills locaux du projet cesi (`cer-fetch` 6, `cer-draft` 6, `cer-submit` 2), `ponytail` 2, `dev-cycle` 2, et quelques skills natifs. Sous-agents : Explore 13, fork 6, Plan 4, general-purpose 1.
+
+- **`code-reviewer` et `debugger` : 0 appel**, sur le PC comme sur le serveur. Classement (b) confirmé.
+- **Skills du harnais jamais appelés dans aucun transcript** : `deploy-checklist`, `sandbox-pretest`, `config-audit`, `harnais-report`, `perplexity-research`, `graphify`, `find-skills`.
+- Les métriques, qui remontent à juillet, montrent un usage rare de quelques autres : `update-harnais` 6, `security-audit` 3, `onboard-project` 3, `harnais-stats` 2, `skill-builder` 1, `dev-cycle` 1, `checkpoint-pause` 1, `checkpoint-resume` 1.
+- **`MONITORING.csv` est vide** (en-tête seul) dans les 3 projets du PC qui l'ont, comme dans les 4 du serveur.
+- `SESSION.md` dépasse largement le « pointeur court » : 365 lignes (Commentateur), 118 (cesi).
+- Les skills **écrits pour un projet précis** (`cer-*`) sont utilisés. C'est un argument pour le manifeste par projet de la v2.
+
+### 7.4 Corrections apportées aux sections précédentes
+
+| Section | Ce qui était écrit | Correction |
+|---|---|---|
+| §1 ligne 1, §6 | PC injoignable, usage non vérifié | Vérifié via 4 sessions, dans les limites du §7.1 |
+| §2.0, « Écart de version : aucun » | Tous les projets équipés sont en v1.16 | **Faux sur le PC** : Commentateur est en v1.8 (8 skills, 9 hooks). `/update-harnais` n'est donc pas lancé partout. Des fichiers `*.harnais-bak` traînent dans 2 projets. |
+| §2.2, `dev-cycle` | 0 appel, redondant | Rarement utilisé (2 appels dans commette). Reste proposé au retrait, mais ce n'est pas « jamais ». |
+| §2.2, `update-harnais`, `security-audit`, `onboard-project` | usage non vérifiable | Usage rare mais réel (voir §7.3). |
+| §2.3 et §4.2, `hard-stop-guard`, `credit-watchdog`, `resume-after-reset` | 0 événement, retrait proposé (ou option) | **À garder sur le PC.** Dans le projet cesi : 22 arrêts pour crédits, 3 arrêts pour contexte, 23 reprises planifiées, 4 reprises effectuées. Dans les 11 autres projets : 2 arrêts et 2 reprises seulement. L'utilité dépend donc du projet : ces hooks vont dans le manifeste, activés là où les sessions sont longues. |
+| §2.3, `hard-stop-guard` | — | 11 erreurs relevées (5 d'écriture de fichier d'état sous Windows, `EPERM rename`) : bogue à corriger en v2. |
+| §2.3, `guard-dangerous-commands` | 7 vrais blocages sur le serveur | Sur le PC : 2 683 blocages, dont environ 2 604 en rafales de tests et **environ 79 vrais** (60 dans un seul projet). Le journal ne distingue pas les tests : cette répartition est une estimation par rafales. La pollution par les tests est confirmée à grande échelle. Dans cesi, 271 blocages sur 1 730 commandes, non triés. |
+| §3.1 | Identité des dépôts tiers supposée | Vérifiée pour Caveman (JuliusBrussee/caveman), Ponytail (DietrichGebert/ponytail) et ECC (affaan-m/ECC). |
+| §3.2 point 2 | ECC ferait disparaître les descriptions partout | ECC n'est installé que dans un projet (et ses variantes). L'effet de budget ne joue que là. Ailleurs, la cause est l'installation de Caveman sans hooks. |
+
+### 7.5 Ce que les sessions disent des règles
+
+- Commentateur attribue une question à la règle 5 (« ne devine pas ») et des réserves « pas testé en réel » à chaque livraison à la règle 3. Elle signale aussi un cas inverse : du code écrit alors que tu voulais un avis, malgré la règle « rien au-delà de la demande ».
+- Les sessions cesi et commette ne relèvent aucune question ni réserve due au harnais.
+
+Le lien entre les règles du §3.3 et tes hésitations reste donc **partiellement étayé** : un cas rapporté, pas une mesure. La règle 3 produit des réserves, mais c'est son rôle ; c'est la règle 5 qu'il faut réécrire.
+
+### 7.6 Effet sur la proposition v2
+
+1. **Installer les tiers comme plugins, par projet** : c'est confirmé comme le point central. En pratique : réinstaller Caveman comme plugin, et ne jamais copier ECC en entier dans un projet.
+2. **Garder `hard-stop-guard`, `credit-watchdog` et `resume-after-reset`**, activables par projet dans le manifeste, et corriger le bogue d'écriture sous Windows.
+3. **Séparer les tests de la télémétrie** du blocage de commandes : c'est aujourd'hui 97 % du bruit.
+4. **Faire vérifier la version par un hook** qui signale un harnais en retard, puisqu'un projet est resté en v1.8.
+5. **Retirer le skill `graphify`** tant que l'outil n'est pas installé, ou l'installer : dans l'état, il ne peut pas servir.
+6. Le reste de la proposition (CLAUDE.md court, historique sorti, 3 skills du socle, skills de projet dans le manifeste) est inchangé.
+
+### 7.7 Ce qui reste non vérifié
+
+- Les chiffres du PC sont rapportés par les sessions, non recomptés.
+- La part de vrais blocages est une estimation.
+- Les projets du PC sans session ouverte (Vlad_Arko, AutoSlide et les autres) n'ont pas été interrogés un par un ; seules leurs métriques agrégées sont connues.
+- Les fichiers hors des dossiers scannés.
 
 **Phase 2** : non commencée. J'attends ta validation.
