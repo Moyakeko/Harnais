@@ -1,0 +1,308 @@
+# CHANGELOG — Harnais
+
+Ce fichier n'est pas chargé en session. Il reçoit l'historique et les explications
+internes qui occupaient environ 55 % du CLAUDE.md v1.16 (audit du 2026-11-13).
+
+## v2.0 (branche `v2`)
+
+Base : audit phase 1 du 2026-11-13 (`RAPPORT-AUDIT.md`, branche `audit`).
+
+- **CLAUDE.md** : le bloc injecté dans les projets vient de `templates/CLAUDE.core.md`
+  (31 lignes avec les marqueurs, comportement et ton uniquement). Le CLAUDE.md du dépôt
+  ne sert plus qu'à travailler sur le dépôt lui-même. Plus de texte « ce dépôt n'est pas
+  un projet applicatif » copié dans les projets.
+- **Règle 5 réécrite** : agir, signaler l'hypothèse en une ligne, question seulement si
+  la réponse change le résultat et que l'action est irréversible. Règle 3 gardée, sans
+  réserve rituelle : dire une fois ce qui est vérifié et ce qui ne l'est pas.
+- **Priorités explicites** : règles de yann pour le comportement, skills et plugins pour
+  le savoir-faire, mode de plugin actif appliqué.
+- **Skills** : socle réduit à session-checkpoint, update-harnais (manuel), deploy-checklist.
+  Les 13 autres skills et les agents code-reviewer et debugger passent dans `optionnel/`,
+  installables via `optional_skills` / `optional_agents`. Skills purement manuels marqués
+  `disable-model-invocation: true` (leur description ne pèse plus dans le contexte).
+- **Hooks** : nouveau `checkpoint-nudge.js` ; plafond 4 Ko et avertissement > 80 lignes
+  pour SESSION.md ; `update-check` signale le retard de version majeure ;
+  `graphify-check` optionnel (désactivé par défaut) et muet sans CLI graphify ;
+  `hard-stop-guard`, `context-watchdog`, `credit-watchdog`, `resume-after-reset`
+  désactivables par projet (actifs par défaut, comportement v1 conservé).
+- **Correctif Windows** : `EPERM rename` sur les fichiers d'état (11 erreurs relevées sur
+  hard-stop-guard) ; écriture via `lib/atomic-write.js` (retry puis écriture directe).
+- **Télémétrie** : `HARNAIS_NO_METRICS=1` respecté par tous les hooks, posé par les
+  tests (97 % du bruit des blocages venait des tests).
+- **Manifeste par projet** (`harnais.manifest.json`) : plugins tiers déclarés comme
+  plugins (`extraKnownMarketplaces` / `enabledPlugins`), skills isolés à version
+  épinglée avec description réécrite, hooks et skills optionnels.
+- **Installeur** : `install/apply.js` gère le manifeste, `--dry-run`, sauvegarde
+  horodatée avant écriture (`.claude/harnais-backups/`), idempotence stricte, budget de
+  descriptions (alerte au-delà de 6 000 caractères), migration v1 vers v2 (skills v1 non
+  retenus mis de côté dans la sauvegarde, skills locaux du projet conservés,
+  `*.harnais-bak` listés sans suppression). `HARNAIS_REF` épingle une version.
+- **Règle de maintenance** `.claude/rules/harnais-maintenance.md` (`paths: .claude/**`).
+- **Tests** : `run-all.js` ; nouveaux `test-v2-hooks.js` et `test-apply.js`. Les tests de
+  watchdogs n'écrivent plus dans le projet courant.
+
+## v1.0 à v1.16
+
+Le détail version par version est dans `EVOLUTION.md` et `SOURCES.md`. Ci-dessous,
+le CLAUDE.md v1.16 complet, archivé tel quel (il contenait l'historique V1.x et la
+description interne des hooks).
+
+<details>
+<summary>CLAUDE.md v1.16 (archive)</summary>
+
+# Harnais — socle Claude Code personnel
+
+Ce dépôt n'est pas un projet applicatif : c'est un **socle réutilisable** à copier ou
+adapter dans chaque nouveau projet (devoir/TP d'école, projet perso, service déployé pour
+toi ou tes proches). La stack varie d'un projet à l'autre — ne suppose jamais un langage
+ou un framework : détecte-le à partir des fichiers présents (`package.json`,
+`requirements.txt`, `Cargo.toml`, `go.mod`, etc.) avant d'agir.
+
+## Règles non négociables
+
+Ces règles s'appliquent **toujours**, quel que soit le projet, le langage, ou le mode de
+permission actif.
+
+1. **Jamais de secret en clair.** Aucune clé API, token, mot de passe ou identifiant en
+   dur dans le code, un commit, ou même une réponse affichée à l'écran. Toujours via
+   variables d'environnement + fichier ignoré par git (`.env` + `.gitignore`). Si tu
+   repères un secret déjà commité ou en train d'être écrit, arrête-toi et préviens
+   immédiatement — ne continue pas silencieusement.
+
+2. **Jamais de commande destructrice ou d'exfiltration sans confirmation explicite.**
+   Ce n'est pas qu'une règle déclarative — un hook déterministe
+   (`.claude/hooks/guard-dangerous-commands.js`) bloque par exit code, indépendamment de
+   ce que tu décides et même en mode auto-approve, cinq catégories :
+   suppression récursive à large rayon d'action (racine, home, disque, cible commençant
+   par une variable, `.`/`..`/`*`, chemin hors projet — `rm`, `Remove-Item` et alias,
+   `rd`/`del`) ; destruction de disque (`mkfs`, `dd` vers un device, `format`,
+   `Format-Volume`) ; git destructif (`push --force`/`--mirror`/`--delete`/`+refspec`,
+   `reset --hard`, `clean -f`, `checkout .`/`restore .`, `filter-branch`, `stash clear`) ;
+   exécution de code téléchargé (`curl … | sh`, `iex (iwr …)`) ; lecture, exfiltration
+   réseau ou `git add` de fichiers secrets via le shell (`cat .env`, `scp id_rsa`…).
+   Si le hook bloque une commande, n'essaie pas de la contourner (reformulation, sudo,
+   alias, interpréteur type `python -c`) : explique pourquoi c'est bloqué et laisse
+   l'utilisateur l'exécuter lui-même dans son propre terminal s'il le veut vraiment.
+   Pour une commande destructrice que le hook ne couvre pas (ex: `git branch -D`, drop
+   d'une table), demande toujours confirmation avant.
+
+3. **Jamais de "c'est fait" sans vérification réelle.** Ne déclare jamais qu'un
+   changement fonctionne sans l'avoir exécuté (build, tests, lancement de l'app) et
+   observé le résultat. Utilise `/verify` ou le skill `dev-cycle` pour ça. Un typecheck
+   qui passe ne prouve pas qu'une fonctionnalité marche.
+
+4. **Explique le pourquoi, pas juste le quoi.** Le code doit être accompagné d'une
+   explication des choix (pourquoi cette approche, pas juste ce qu'elle fait) — le nom
+   des identifiants suffit déjà à décrire le "quoi". Contexte d'apprentissage oblige :
+   privilégie la pédagogie à la vitesse quand les deux sont en tension.
+
+5. **Principes Karpathy (réflexion avant exécution) :**
+   - Ne devine jamais silencieusement une hypothèse ambiguë — formule-la à voix haute et
+     pose la question si le doute change l'implémentation. Un changement de dépendance
+     (nouveau paquet, remplacement suite à une erreur de build) fait partie de ces choix
+     à justifier explicitement, jamais un swap silencieux — voir la skill
+     `security-audit` pour la vérification à faire avant.
+   - N'ajoute rien au-delà de ce qui est demandé : pas d'abstraction, de feature ou de
+     gestion d'erreur spéculative pour un cas qui ne peut pas se produire.
+   - Change chirurgicalement : ne touche que le code directement lié à la tâche, respecte
+     le style existant, ne "nettoie" pas au passage sans qu'on te le demande.
+   - Transforme toute tâche vague en critères de succès vérifiables avant de coder.
+
+6. **Maintiens `SESSION.md` à jour.** Après avoir compris le contexte du projet en début
+   de session, réfère-toi à `SESSION.md` pour savoir où on en est (il t'est normalement
+   déjà injecté automatiquement au démarrage par un hook). Mets-le à jour via la skill
+   `session-checkpoint` après chaque étape significative — reste un pointeur court, pas
+   un journal qui s'accumule. Une fois qu'un point bloquant listé dedans est résolu,
+   retire-le plutôt que de le garder en historique. La même skill `session-checkpoint`
+   maintient aussi `LESSONS.md` (V1.15) — mémoire project-local versionnée avec git,
+   réservée aux leçons non-évidentes (correction utilisateur, piège contre-intuitif) —
+   systématiquement avant de terminer une session, pas seulement sur demande explicite.
+
+## Skills du socle — quand les utiliser
+
+| Skill | Quand |
+|---|---|
+| `onboard-project` | Une fois, au tout début d'un nouveau projet posé sur ce socle — si plusieurs fonctionnalités émergent, découpage en Stories BMAD + `find-skills` par Story. |
+| `dev-cycle` | Pour toute fonctionnalité/bug non trivial : explore → plan → code → test → review. Même découpage en Stories que `onboard-project` si la demande couvre plusieurs écrans. |
+| `security-audit` | Avant un commit/PR/déploiement, ou avant d'ajouter/monter/remplacer une dépendance — secrets, hygiène repo, vérification CVE de version (OSV.dev) et anti-swap aveugle. |
+| `config-audit` | Sur demande, ou en suggestion avant `deploy-checklist`/avant d'ajouter un serveur MCP — audite `.claude/` lui-même (hooks, `settings.json`, serveurs MCP), pas le code du projet. Rapport seul, jamais bloquant. |
+| `sandbox-pretest` | Avant un premier déploiement, une dépendance nouvelle, ou l'exécution de code de provenance incertaine — exécution en environnement isolé (Docker si dispo). |
+| `deploy-checklist` | Avant de déployer ou mettre à jour un service réel — recherche `find-skills` ciblée sur la stack réelle avant la checklist. |
+| `skill-builder` | Pour créer une nouvelle skill du socle, ou dériver une version plus légère (ex: un socle "études uniquement"). |
+| `session-checkpoint` | Après une étape significative, avant une pause connue, ou sur "fais le point" — met à jour `SESSION.md`. |
+| `checkpoint-pause` | Arrêt manuel d'urgence (`/checkpoint-pause`) — capture vite "En cours / bloqué" dans `SESSION.md` et s'arrête, sans finir la tâche en cours. Ne peut pas interrompre elle-même une action : Échap/Ctrl+C d'abord si Claude est en plein milieu d'un outil. |
+| `checkpoint-resume` | Reprise explicite (`/checkpoint-resume`) — relit "En cours / bloqué" et reprend directement, même en cours de session, sans redemander où on en était. |
+| `update-harnais` | Sur "mets à jour le harnais" — récupère la dernière version du socle sur un projet qui l'a déjà (additif, ne touche jamais `SESSION.md`). Peut aussi être proposée automatiquement en début de session par le hook `update-check.js` (V1.12) quand une version plus récente est publiée — le hook ne fait qu'informer, jamais lancer la mise à jour lui-même. |
+| `find-skills` | Quand l'utilisateur cherche une skill existante pour une capacité qu'il n'a pas ("y a-t-il une skill pour X ?") — découverte/installation depuis l'écosystème `npx skills`, externe au socle. |
+| `harnais-report` | Sur "rapport d'usage"/"stats du harnais" — agrège `.claude/harnais-metrics.jsonl` en un résumé lisible (hooks/skills les plus invoqués, ratio block/allow, arrêts durs). |
+| `harnais-stats` | Alimente `MONITORING.csv` (journal daté, comparable entre projets) — automatiquement (annonce puis écriture directe) quand Claude remarque un incident/problème en cours de travail, ou en dialogue avec accord explicite avant d'écrire sur demande ouverte ("stats du projet"). |
+| `perplexity-research` | Recherche approfondie/sourcée optionnelle (MCP Perplexity) — complément de `WebSearch` natif, jamais un prérequis, jamais de clé en clair. |
+| `graphify` | Cartographier l'architecture d'un gros repo inconnu via un graphe de connaissances (outil tiers Graphify-Labs, CLI `graphify`/PyPI `graphifyy`) — optionnelle, passe par `security-audit` + `sandbox-pretest` avant toute première installation (plusieurs dépôts tiers portent ce même nom). |
+
+Skills globales déjà disponibles dans le harnais Claude Code (ne pas dupliquer) :
+`/verify` (vérification end-to-end d'un changement), `/code-review` (revue du diff
+courant), `/security-review` (revue de sécurité approfondie). Les skills ci-dessus
+s'appuient dessus plutôt que de réinventer leur logique.
+
+Si le plugin global `caveman` est disponible dans l'environnement (hors socle, jamais
+versionné dans ce dépôt), il est pertinent en mode compression pour des sessions de
+code pur — jamais pour une session à dominante rédaction/pédagogie, où la règle n°4
+ci-dessus (expliquer le pourquoi) prime sur la compacité. Optionnel, jamais un
+prérequis. Objectif visé sur les sessions de code : **au moins -33% de tokens de
+sortie** grâce à `caveman` + la recommandation `graphify` (V1.16, voir ci-dessous) —
+mesuré via `/caveman-stats` et suivi dans `MONITORING.csv` (voir `harnais-stats`,
+section "suivi de la dépense de token") d'une mise à jour à l'autre, pas une
+affirmation en l'air (règle n°3).
+
+## Sous-agents
+
+| Agent | Rôle |
+|---|---|
+| `code-reviewer` | Revue d'un module/périmètre large (pas juste le diff courant) sans polluer le contexte principal. |
+| `debugger` | Root-cause un bug (reproduire, isoler, diagnostiquer) sans remplir le contexte principal de bruit d'investigation. |
+
+## Ce qui est contre-intuitif ici
+
+- Le hook `guard-dangerous-commands.js` bloque cinq catégories (suppression récursive
+  large, destruction de disque, git destructif, code téléchargé pipé dans un shell,
+  fichiers secrets via le shell) **sans possibilité de contournement côté Claude**, même
+  en mode auto-approve. Ce n'est pas un bug si une commande légitime mais mal formulée
+  se fait bloquer (ex: `rm -rf $BUILD_DIR` — expansion non vérifiable —, ou l'installateur
+  officiel `curl … | sh` de rustup/nvm) — c'est voulu : l'utilisateur la lance lui-même
+  dans son terminal.
+- `permissions.deny` dans `.claude/settings.json` empêche Claude de **lire** les fichiers
+  secrets du projet (`.env`, `.env.local`, `.env.*.local`, `.env.development`,
+  `.env.production`, `.env.test`, `.env.staging`, `*.pem`, `*.key`, `secrets/`, états
+  Terraform, clés SSH…) et du home (`~/.ssh`, `~/.aws`, `~/.config/gh`…) — cette règle
+  passe avant toute autorisation accordée ailleurs. Le hook étend le même blocage aux
+  lectures via shell (`cat .env`), à l'exfiltration réseau et à `git add`. Depuis V1.10,
+  la règle `.env` est une liste énumérée des vraies variantes sensibles, pas un wildcard
+  `.env.*` — `permissions.deny` ne supporte pas la négation (`!pattern`), un wildcard
+  large aurait donc aussi rendu `.env.example` illisible par l'outil Read. Un
+  `.env.example` versionné reste donc lisible tel quel ; seul un nom de variante non
+  énuméré (une variante d'environnement maison, par exemple) devrait être ajouté à la
+  liste au cas par cas plutôt que de revenir à un wildcard.
+- `disableBypassPermissionsMode: "disable"` dans `settings.json` empêche de démarrer ce
+  projet en mode `--dangerously-skip-permissions` : hooks et deny ci-dessus restent
+  actifs quoi qu'il arrive.
+- L'installation/mise à jour du socle lui-même passe par un one-liner
+  (`curl … | sh` ou `iwr … | iex`, voir README.md) qui est précisément le genre de
+  commande que le hook bloque. Ce n'est pas une contradiction : l'utilisateur le lance
+  lui-même, dans son terminal, avant que le socle n'existe sur le projet. Si on te
+  demande de le faire depuis Claude Code, ne contourne pas le blocage — propose soit
+  que l'utilisateur le lance lui-même, soit (après confirmation) de télécharger le
+  script puis l'exécuter en deux étapes séparées, jamais pipées.
+- Si un de ces blocages surprend, ce n'est pas un problème à contourner : c'est le socle
+  qui fait exactement ce pour quoi il a été conçu (voir `SOURCES.md` pour le pourquoi).
+- Le contenu de `SESSION.md` apparaît automatiquement en tout début de session (hook
+  `SessionStart`) sans que tu aies rien demandé — normal, c'est voulu. S'il est absent ou
+  vide, la session démarre quand même normalement.
+- **L'auto-compact natif est désactivé** (`autoCompactEnabled: false` dans
+  `settings.json`) : le socle prend intégralement le relais du contrôle de contexte, il
+  ne compose plus avec l'auto-compact intégré. Deux niveaux de surveillance, tous deux
+  basés sur le snapshot écrit par `statusline.js` :
+  - `context-watchdog.js` (`UserPromptSubmit`) : simple rappel non bloquant à 70 %, une
+    fois par session, ordonnant d'exécuter `session-checkpoint`.
+  - `hard-stop-guard.js` (`PostToolUse`, vérifié après CHAQUE outil — pas seulement à
+    l'envoi d'un message) : **arrêt DUR** à 85 % du contexte. Si un message d'ordre de ce
+    hook apparaît (stderr d'un tool bloqué), obéis immédiatement : seuls `Read`
+    (n'importe quel fichier), `Write`/`Edit` sur `SESSION.md`/`.claude/session-log.md`,
+    et `ListAgents`/`SendMessage`/`TaskStop` (V1.14 — voir plus bas) restent autorisés.
+    Termine le checkpoint dans ces deux fichiers puis dis à l'utilisateur de fermer la
+    session et d'en ouvrir une nouvelle (ou `/clear`) — n'essaie pas de continuer la
+    tâche interrompue avec d'autres outils, le hook te bloquera à chaque tentative. Ce
+    blocage n'est jamais réarmé seul : seul un `/compact` manuel ou une nouvelle session
+    repart propre.
+- Le même `hard-stop-guard.js` applique un arrêt dur analogue aux crédits de la fenêtre
+  5h, à 95 % (en plus du rappel doux de `context-watchdog.js` à 85 %, seuil remonté de
+  90 à 95 % en V1.14 pour se garder une marge dédiée à l'arrêt propre des agents en
+  arrière-plan — voir plus bas pour le fix associé du fail-open sur snapshot périmé) : il planifie une
+  **reprise automatique** à la réinitialisation — `resume-after-reset.js` ouvre alors
+  lui-même un terminal visible avec `claude --resume <session>` et une instruction de
+  continuation injectée (bornée à la tâche en cours, section "En cours / bloqué" de
+  `SESSION.md`). Ceci inverse un choix antérieur (V1.7 : reprise "jamais headless",
+  toast seul) sur demande explicite de l'utilisateur — voir SOURCES.md V1.9. Un plafond
+  d'actions (`.claude/watchdog-config.json`, défaut 30) et le retour du contexte à 85 %
+  forcent un nouvel arrêt dur si la reprise s'emballe. Ne « nettoie » jamais une tâche
+  planifiée `HarnaisResume_*` sans demander.
+- Le chemin RÉACTIF `credit-watchdog.js` (`StopFailure`, coupure crédits déjà survenue
+  sans avoir été anticipée) reste en place en complément, avec la même logique de
+  planification/reprise (factorisée dans `.claude/hooks/lib/resume-scheduler.js`,
+  partagée avec le chemin proactif de `hard-stop-guard.js`).
+- **V1.11 — fail-open corrigé sur snapshot périmé.** Avant cette version, si le snapshot
+  statusline n'était pas rafraîchi depuis plus de 5 minutes (rafale d'outils sans
+  rafraîchissement de l'UI, hors contrôle du socle), `hard-stop-guard.js` sautait
+  silencieusement toute détection — indiscernable d'un cas réellement sain. Désormais, si
+  la dernière valeur connue était déjà en zone de vigilance (≥75 % contexte ou ≥80 %
+  crédits), un avertissement est émis après 10 outils consécutifs sans nouveau relevé,
+  puis un arrêt dur conservateur après 20 — sans base "en zone de vigilance", aucune
+  escalade sur la seule staleness (une session peu active n'est pas punie).
+- **V1.14 — agents en arrière-plan invisibles à `hard-stop-guard.js`.** La détection de
+  seuil exige que le snapshot statusline corresponde au `session_id` courant — un agent
+  lancé en tâche de fond (outil `Agent`) n'a pas de statusline propre, donc il ne peut
+  **pas** s'auto-arrêter via ce mécanisme, même si le seuil réel est dépassé (constaté en
+  conditions réelles : la session principale s'arrête proprement, mais des agents lancés
+  plus tôt continuaient jusqu'à être coupés par le vrai épuisement de crédits, sans
+  sauvegarde). Le correctif est côté orchestration, pas télémétrie par agent : pendant
+  l'arrêt dur, `ListAgents`/`SendMessage`/`TaskStop` sont whitelistés, et le message
+  d'ordre du hook demande explicitement de prévenir (`SendMessage`, sauvegarde immédiate
+  dans `session-log.md`) puis stopper (`TaskStop`) chaque agent encore actif, en plus du
+  checkpoint habituel. Reste du best-effort assumé, pas une garantie à 100% : un agent en
+  plein milieu d'un unique appel d'outil au moment du `TaskStop` perd ce qui n'est pas
+  encore écrit — strictement mieux que la coupure actuelle par le vrai quota, pas plus.
+  Convention complémentaire : toute tâche multi-parties confiée à un sous-agent doit lui
+  demander explicitement de checkpointer sa progression au fil de l'eau dans
+  `session-log.md` (pas seulement dans son rapport final), pour limiter la perte réelle
+  si un `TaskStop` (ou la vraie coupure) le coupe en plein milieu.
+- La skill `update-harnais` télécharge `install.ps1`/`install.sh` dans un fichier puis
+  l'exécute directement (deux étapes séparées, jamais pipées) — ce n'est pas un
+  contournement du hook de garde, c'est précisément le mécanisme que ce même CLAUDE.md
+  prévoit pour ce cas (règle n°2) : le hook ne bloque qu'un pipe vers un interpréteur,
+  pas un téléchargement de fichier suivi d'une exécution directe.
+- La skill `find-skills` peut faire exécuter `npx skills add <owner/repo@skill>` :
+  contrairement à `curl … | sh`, ce n'est **pas** une des cinq catégories bloquées par
+  `guard-dangerous-commands.js` (ce n'est ni un pipe vers un interpréteur, ni une
+  suppression, ni du git destructif) — le hook laisse donc passer l'installation d'une
+  skill tierce. La vigilance normale s'applique : c'est du code non fiable par défaut,
+  vérifie la réputation de la source avant d'installer (voir la skill elle-même), et
+  `sandbox-pretest` reste l'outil si le doute persiste après coup.
+- La skill `graphify` (V1.12) illustre concrètement ce risque : "graphify" recouvre
+  plusieurs dépôts GitHub distincts sous des noms quasi identiques (voir la skill pour la
+  liste) — un nom de projet populaire très cloné n'est pas un cas rare. Vérifie toujours
+  la source exacte (dépôt + registre de paquet) avant d'installer, pas seulement le nom.
+- Le hook `update-check.js` (V1.12, `SessionStart`) est le seul hook du socle qui fait un
+  appel réseau (API GitHub, anonyme, throttlé à 1×/24h par projet) — c'est volontaire :
+  il ne fait qu'informer (message dans le contexte si une version plus récente est
+  publiée), jamais appliquer de mise à jour lui-même. Fail-open systématique (absence de
+  `.claude/harnais.version`, timeout, erreur réseau → silence complet) ; ce dépôt (le
+  socle source) n'a pas ce fichier et n'est donc jamais concerné par ce hook.
+- Le hook `graphify-check.js` (V1.16, `SessionStart`) suit le même patron
+  qu'`update-check.js` (fail-open, throttle local, jamais d'action lui-même) mais sans
+  aucun appel réseau : il compte simplement les fichiers du repo (heuristique fs, bruit
+  de dépendances exclu) pour détecter un repo volumineux/inconnu, et consulte
+  `harnais-metrics.jsonl` pour savoir si `graphify` a déjà été utilisé ici. Il ne sait
+  pas si l'outil est réellement installé sur la machine — ce serait un appel process
+  externe, hors de ce que ce hook fait par conception ; il se contente du signal fs
+  disponible. Throttle sur 7 jours, pas 24h comme `update-check.js` : ce n'est pas une
+  info qui change vite.
+
+## Ce qui est volontairement absent (pour l'instant)
+
+Pas de système de mémoire/apprentissage continu à score de confiance façon ECC
+("instincts", auto-génération de skills), pas de couche sécurité multi-agents continue
+façon AgentShield, pas de règles par langage séparées, pas de support multi-harnais. Une
+version réduite de deux de ces idées a été ajoutée en V1.15 sur demande explicite de
+l'utilisateur — `LESSONS.md` (mémoire project-local simple, sans scoring) et
+`config-audit` (audit ponctuel de configuration, sans scan continu) — voir `SOURCES.md`
+pour le détail du périmètre retenu/écarté. Le socle reste à 16 skills (11→15 en V1.12 :
+`graphify`, `harnais-stats`, `checkpoint-pause`, `checkpoint-resume` ; 15→16 en V1.15 :
+`config-audit` ; toutes ajoutées sur demande explicite de l'utilisateur via
+`skill-builder`, pas une dérive automatique) + 2 agents + 10 hooks (+ 1 statusline,
+`update-check.js` ajouté en V1.12, `graphify-check.js` ajouté en V1.16) par choix
+délibéré — à faire évoluer via
+`skill-builder` si le besoin s'en fait sentir, pas par défaut. Pour toute évolution du
+socle lui-même (scripts d'auto-amélioration, adaptation à un autre modèle, durcissement
+entreprise, futur mécanisme de checkpoint/rollback) : lis `EVOLUTION.md` d'abord — il
+fixe les invariants qu'aucune évolution ne doit affaiblir.
+
+</details>
