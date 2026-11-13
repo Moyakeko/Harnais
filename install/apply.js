@@ -784,7 +784,7 @@ const pluginCmds = [];
 for (const p of M.plugins || []) {
   const s = parseSource(p.source, manifest.dir);
   const mkArg = s.kind === "github" ? `${s.repo}${p.ref ? `#${p.ref}` : ""}` : s.kind === "git" ? `${s.url}${p.ref ? `#${p.ref}` : ""}` : s.path;
-  pluginCmds.push(["plugin", "marketplace", "add", mkArg]);
+  pluginCmds.push(["plugin", "marketplace", "add", mkArg, "--scope", "project"]);
   pluginCmds.push(["plugin", "install", `${p.name}@${p.marketplace}`, "--scope", "project"]);
 }
 const pluginResults = [];
