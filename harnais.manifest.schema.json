@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Moyakeko/Harnais/harnais.manifest.schema.json",
+  "title": "Manifeste Harnais d'un projet (v2)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "harnais": { "type": "string", "description": "Version du socle visée, ex. \"2.0\"." },
+    "plugins": {
+      "type": "array",
+      "description": "Plugins Claude Code tiers, installés comme plugins (avec leurs hooks), activés pour ce projet.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "marketplace", "source"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$", "description": "Nom du plugin dans la marketplace." },
+          "marketplace": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$", "description": "Nom de la marketplace (clé de extraKnownMarketplaces)." },
+          "source": { "type": "string", "description": "github:owner/repo, URL git, ou chemin local d'une marketplace." },
+          "ref": { "type": "string", "description": "Tag ou branche épinglé (recommandé : un tag)." },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "description": "Skills isolés copiés dans .claude/skills/<name>/ (ex. un skill ECC à la carte).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "from", "description"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+          "from": { "type": "string", "description": "github:owner/repo, URL git, ou chemin local (relatif au manifeste)." },
+          "path": { "type": "string", "description": "Dossier du skill dans la source (contient SKILL.md)." },
+          "ref": { "type": "string", "description": "Tag ou branche épinglé." },
+          "description": { "type": "string", "maxLength": 1536, "description": "Description réécrite, commençant par « Use when… », adaptée au projet." },
+          "paths": {
+            "description": "Globs : le skill ne se charge que sur ces fichiers.",
+            "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+          }
+        }
+      }
+    },
+    "optional_hooks": {
+      "description": "Hooks optionnels du socle. Objet {nom: booléen} ; un tableau de noms vaut « ces hooks activés ». Défauts : tous actifs sauf graphify-check.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hard-stop-guard": { "type": "boolean" },
+            "context-watchdog": { "type": "boolean" },
+            "credit-watchdog": { "type": "boolean" },
+            "resume-after-reset": { "type": "boolean" },
+            "graphify-check": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "array",
+          "items": { "enum": ["hard-stop-guard", "context-watchdog", "credit-watchdog", "resume-after-reset", "graphify-check"] }
+        }
+      ]
+    },
+    "optional_skills": {
+      "type": "array",
+      "description": "Skills du dossier optionnel/skills du socle à installer dans ce projet.",
+      "items": {
+        "enum": ["checkpoint-pause", "checkpoint-resume", "config-audit", "dev-cycle", "find-skills", "graphify", "harnais-report", "harnais-stats", "onboard-project", "perplexity-research", "sandbox-pretest", "security-audit", "skill-builder"]
+      }
+    },
+    "optional_agents": {
+      "type": "array",
+      "description": "Agents du dossier optionnel/agents du socle.",
+      "items": { "enum": ["code-reviewer", "debugger"] }
+    }
+  }
+}

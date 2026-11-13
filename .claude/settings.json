@@ -28,14 +28,6 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/update-check.js\""
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/graphify-check.js\""
-          }
-        ]
       }
     ],
     "PreCompact": [
@@ -44,6 +36,14 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/precompact-safety-net.js\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/checkpoint-nudge.js\" PreCompact"
           }
         ]
       }
@@ -119,6 +119,14 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/hard-stop-guard.js\" Stop"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/checkpoint-nudge.js\" Stop"
           }
         ]
       }

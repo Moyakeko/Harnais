@@ -48,7 +48,8 @@ try {
     $sha = 'local'
   }
   else {
-    $ref = Resolve-LatestRef
+    # v2 : HARNAIS_REF epingle une version (ex. v1.16 pour revenir en arriere, v2 pour la branche).
+    $ref = if ($env:HARNAIS_REF) { $env:HARNAIS_REF } else { Resolve-LatestRef }
     # Endpoint API zipball : le dossier extrait s'appelle <owner>-<repo>-<sha court>,
     # ce qui donne le sha sans requête supplémentaire (l'archive branche de codeload
     # s'extrait en <repo>-<branche>, sans sha — même nommage pour un tag). Limite non
@@ -81,6 +82,7 @@ try {
   function Format-NodeArg([string]$s) { '"{0}"' -f ($s -replace '"', '\"') }
   $applyArgs = @($apply, '--source', $src, '--target', $target, '--commit', $sha)
   if ($ref) { $applyArgs += @('--tag', $ref) }
+  if ($env:HARNAIS_DRY_RUN -eq '1') { $applyArgs += '--dry-run' }
   $argLine = ($applyArgs | ForEach-Object { Format-NodeArg $_ }) -join ' '
 
   $psi = [Diagnostics.ProcessStartInfo]::new('node', $argLine)

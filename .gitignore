@@ -33,6 +33,10 @@ credentials*.json
 # voulu, documenté dans CLAUDE.md/EVOLUTION.md, pas un bug.
 .claude/harnais-metrics.jsonl
 
+# États locaux v2 (checkpoint-nudge, sauvegardes de l'installeur)
+.claude/checkpoint-nudge.json
+.claude/harnais-backups/
+
 # Config Claude Code propre à la machine (pas au socle)
 .claude/settings.local.json
 

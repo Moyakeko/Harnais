@@ -60,7 +60,8 @@ if [ -n "${HARNAIS_SOURCE_DIR:-}" ]; then
   SRC="$HARNAIS_SOURCE_DIR"
   SHA="local"
 else
-  REF="$(latest_ref)" || REF="$BRANCH"
+  # v2 : HARNAIS_REF epingle une version (ex. v1.16 pour revenir en arriere, v2 pour la branche).
+  if [ -n "${HARNAIS_REF:-}" ]; then REF="$HARNAIS_REF"; else REF="$(latest_ref)" || REF="$BRANCH"; fi
   # Endpoint API tarball : le dossier extrait s'appelle <owner>-<repo>-<sha court>,
   # ce qui donne le sha sans requête supplémentaire (l'archive branche de codeload
   # s'extrait en <repo>-<branche>, sans sha) — même nommage pour un tag.
@@ -75,7 +76,7 @@ else
 fi
 
 if [ -n "$REF" ]; then
-  node "$SRC/install/apply.js" --source "$SRC" --target "$PWD" --commit "$SHA" --tag "$REF"
+  node "$SRC/install/apply.js" --source "$SRC" --target "$PWD" --commit "$SHA" --tag "$REF" ${HARNAIS_DRY_RUN:+--dry-run} "$@"
 else
-  node "$SRC/install/apply.js" --source "$SRC" --target "$PWD" --commit "$SHA"
+  node "$SRC/install/apply.js" --source "$SRC" --target "$PWD" --commit "$SHA" ${HARNAIS_DRY_RUN:+--dry-run} "$@"
 fi

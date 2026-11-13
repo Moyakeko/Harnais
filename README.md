@@ -10,6 +10,98 @@ jour depuis le chat Claude Code lui-même (skill `update-harnais`, voir plus bas
 un rappel automatique en début de session si une version plus récente est publiée
 (hook `update-check.js`, jamais d'application automatique).
 
+## Version 2 (branche `v2`)
+
+La v2 allège ce qui est chargé à chaque session et déclare les outils tiers par projet.
+
+- `CLAUDE.md` injecté dans les projets : 31 lignes, comportement et ton seulement
+  (`templates/CLAUDE.core.md`). L'historique est dans `CHANGELOG.md`.
+- Socle : 3 skills (`session-checkpoint`, `update-harnais`, `deploy-checklist`). Les
+  autres skills et les agents restent disponibles dans `optionnel/`.
+- Hooks : garde-fou des commandes, injection de SESSION.md plafonnée à 4 Ko, alerte de
+  version, rappel de checkpoint, statusline, notifications, filet avant compaction.
+  Les watchdogs (arrêt dur, rappels, crédits, reprise) restent actifs par défaut et se
+  coupent par projet.
+
+### Installer
+
+Dans le dossier du projet, depuis ton terminal (Node.js requis). Tant que la v2 n'est
+pas taguée, on la prend sur sa branche :
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Moyakeko/Harnais/v2/install.sh -o harnais-install.sh
+HARNAIS_REF=v2 HARNAIS_DRY_RUN=1 sh harnais-install.sh   # essai à blanc : rien n'est écrit
+HARNAIS_REF=v2 sh harnais-install.sh                      # installation
+```
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/Moyakeko/Harnais/v2/install.ps1 -OutFile harnais-install.ps1
+$env:HARNAIS_REF='v2'; $env:HARNAIS_DRY_RUN='1'; ./harnais-install.ps1   # essai à blanc
+Remove-Item Env:HARNAIS_DRY_RUN; ./harnais-install.ps1                   # installation
+```
+
+L'installeur ne touche jamais SESSION.md, LESSONS.md ni les skills propres au projet.
+Tout fichier modifié est d'abord copié dans `.claude/harnais-backups/<horodatage>/`.
+Relancer sans rien changer n'écrit rien.
+
+Sur un projet en v1, la mise à jour remplace le bloc `harnais:core` de CLAUDE.md, met de
+côté (dans la sauvegarde) les skills v1 que le manifeste ne demande pas, et liste les
+vieux fichiers `*.harnais-bak` sans les supprimer.
+
+### Le manifeste du projet
+
+Copie `harnais.manifest.example.json` en `harnais.manifest.json` à la racine du projet,
+garde ce qui sert, puis relance l'installeur (ou `/update-harnais`).
+
+| Clé | Rôle |
+|---|---|
+| `plugins` | Plugins tiers : `name`, `marketplace`, `source` (`github:owner/repo`), `ref` (tag). |
+| `skills` | Skills isolés copiés dans `.claude/skills/` : `name`, `from`, `path`, `ref`, `description` réécrite (« Use when… »), `paths` facultatif. |
+| `optional_hooks` | `{ "hard-stop-guard": false, ... }`. Défaut : tout actif sauf `graphify-check`. |
+| `optional_skills` | Skills de `optionnel/skills` (ex. `security-audit`, `dev-cycle`, `onboard-project`, `skill-builder`). |
+| `optional_agents` | `code-reviewer`, `debugger`. |
+
+Le schéma est copié dans `.claude/harnais.manifest.schema.json`. L'installeur additionne
+les descriptions des skills et prévient au-delà de 6 000 caractères : au-delà, Claude
+Code commence à masquer des descriptions et les skills concernés ne se déclenchent plus.
+
+### Caveman, Ponytail et ECC
+
+- **Caveman et Ponytail** se branchent comme **plugins**, jamais en copiant leurs
+  skills : leur mode tient grâce à leurs hooks, qui ne viennent qu'avec le plugin.
+  Déclare-les dans `plugins` (voir l'exemple). L'installeur écrit
+  `extraKnownMarketplaces` et `enabledPlugins` dans `.claude/settings.json`. Claude Code
+  ne télécharge pas le plugin tout seul : lance une fois par machine les commandes
+  `claude plugin ...` affichées à la fin, ou relance l'installeur avec
+  `--install-plugins`.
+- **ECC** : à la carte, un skill à la fois dans `skills`, avec une description réécrite
+  pour ce projet. Jamais le plugin complet (plus de 300 skills, dix fois le budget).
+
+### Revenir en v1.16
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Moyakeko/Harnais/v2/install.sh -o harnais-install.sh
+HARNAIS_REF=v1.16 sh harnais-install.sh
+```
+
+```powershell
+$env:HARNAIS_REF='v1.16'; ./harnais-install.ps1
+```
+
+`HARNAIS_REF` vient de l'installeur v2 : l'installeur de la v1.16 prend toujours le
+dernier tag publié. Le tag `v1.16` reste inchangé. L'installeur v1.16 ajoute sans
+retirer : les hooks v2 (dont `checkpoint-nudge`) restent enregistrés, ce qui est sans
+danger. Sinon, restaure les fichiers depuis
+`.claude/harnais-backups/<horodatage>/`, qui contient l'état exact d'avant la mise à jour.
+
+### Tests
+
+`node .claude/hooks/tests/run-all.js` lance toutes les suites, y compris l'installeur
+dans ce dépôt. Les tests posent `HARNAIS_NO_METRICS=1` : ils n'écrivent plus dans
+`harnais-metrics.jsonl`.
+
+## Documentation v1.16 (référence)
+
 ## À qui s'adressent les fichiers
 
 | Fichier | Lecteur | Rôle |
