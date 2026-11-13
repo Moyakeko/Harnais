@@ -4,6 +4,7 @@ description: Reprend immédiatement la tâche notée dans SESSION.md ("En cours 
   bloqué") sans redemander où on en était — contrepartie de checkpoint-pause,
   utilisable dans la même session ou une nouvelle. Triggers on "/checkpoint-resume",
   "reprends", "continue où on en était", "on reprend".
+disable-model-invocation: true
 ---
 
 # checkpoint-resume

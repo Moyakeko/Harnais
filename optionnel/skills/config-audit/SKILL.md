@@ -1,6 +1,7 @@
 ---
 name: config-audit
 description: Audit léger de la configuration Claude Code elle-même (hooks, .claude/settings.json, serveurs MCP) — pas le code ou les dépendances du projet (ça, c'est security-audit). Triggers on "audit de config", "config-audit", "vérifie ma config Claude Code", avant d'ajouter un nouveau serveur MCP, ou en suggestion avant deploy-checklist. Inspiré d'AgentShield (ECC) mais réduit : rapport seul, jamais bloquant.
+disable-model-invocation: true
 ---
 
 # config-audit

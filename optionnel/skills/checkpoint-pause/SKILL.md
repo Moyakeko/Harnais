@@ -5,6 +5,7 @@ description: Capture immédiatement l'état d'avancement dans SESSION.md ("En co
   tâche prend plus de temps que prévu) sans perdre le contexte, à reprendre plus tard
   même dans une autre session via checkpoint-resume. Triggers on "/checkpoint-pause",
   "je dois arrêter là", "sauvegarde et arrête-toi", "je n'ai plus le temps".
+disable-model-invocation: true
 ---
 
 # checkpoint-pause

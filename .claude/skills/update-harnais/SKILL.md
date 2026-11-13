@@ -1,6 +1,7 @@
 ---
 name: update-harnais
 description: Met à jour le socle Harnais déjà installé sur ce projet vers la dernière version publiée sur GitHub — ajoute les nouveaux hooks/skills/agents, fusionne CLAUDE.md/.gitignore/settings.json, sans jamais toucher SESSION.md ni le travail en cours. Triggers on "mets à jour le harnais", "update le socle", "update-harnais", "nouvelle version du harnais", "récupère les dernières skills du socle".
+disable-model-invocation: true
 ---
 
 # update-harnais
@@ -87,6 +88,15 @@ Depuis la **racine du projet** (pas un sous-dossier) :
 
 - Windows : `powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\harnais-update.ps1"`
 - macOS/Linux : `sh /tmp/harnais-update.sh`
+
+v2 : lance d'abord un essai à blanc (`HARNAIS_DRY_RUN=1`, en variable d'environnement
+devant la même commande ; sous PowerShell `$env:HARNAIS_DRY_RUN='1'` puis la commande,
+puis `Remove-Item Env:HARNAIS_DRY_RUN`). Montre le plan en quelques lignes (fichiers
+remplacés, skills v1 retirés, hooks optionnels, budget de descriptions), puis lance la
+vraie mise à jour. L'installeur lit `harnais.manifest.json` à la racine du projet
+(plugins, skills isolés, hooks et skills optionnels) et sauvegarde tout fichier modifié
+dans `.claude/harnais-backups/<horodatage>/`. Pour revenir à une version précise :
+`HARNAIS_REF=v1.16` (ou un autre tag) devant la commande.
 
 Ce script télécharge l'archive de la référence résolue à l'étape 2 (tag le plus
 récent, ou `main` en repli) et délègue toute la fusion à `install/apply.js` — le même

@@ -1,6 +1,7 @@
 ---
 name: onboard-project
 description: Use once at the very start of a new project built on this harness (school assignment, personal project, or real deployment for the user/friends). Sets up a short PROJECT.md capturing project nature, stack, constraints, and deployment target. Triggers on "onboard", "nouveau projet", "démarre ce projet", "configure ce repo", or when CLAUDE.md exists but no PROJECT.md does yet.
+disable-model-invocation: true
 ---
 
 # onboard-project

@@ -7,6 +7,7 @@ description: Tient MONITORING.csv à jour — journal daté, par projet, des inc
   confirmation bloquante) et interactif (demande ouverte explicite — "stats du projet",
   "harnais-stats", "documente l'usage du harnais", "fais le point sur le harnais" —
   propose une note de pertinence par skill et confirme avant d'écrire).
+disable-model-invocation: true
 ---
 
 # harnais-stats

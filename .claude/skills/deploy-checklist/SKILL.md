@@ -21,17 +21,17 @@ jamais VPS ou PaaS par défaut.
 - Le service manipule-t-il des secrets, une base de données, ou des données
   personnelles de proches ?
 
-## 2. Recherche ciblée avant la checklist (find-skills + web si besoin)
+## 2. Recherche ciblée avant la checklist (skills du projet + web si besoin)
 
 Avant de dérouler la checklist, prends le temps d'aller dans le détail plutôt que de te
 précipiter :
 
 1. Identifie précisément la stack de déploiement réelle (langage, framework, base de
    données, provider) depuis `PROJECT.md`/le repo — jamais une supposition générique.
-2. Appelle `find-skills` avec une requête ciblée sur cette stack précise (ex:
-   "déploiement Fly.io Node Postgres") pour repérer une skill existante pertinente.
-   Présente les candidats trouvés ; n'installe qu'après accord explicite de
-   l'utilisateur (comportement standard de `find-skills`, inchangé).
+2. Si le skill optionnel `find-skills` est installé, appelle-le avec une requête ciblée
+   sur cette stack précise (ex: "déploiement Fly.io Node Postgres"). Présente les
+   candidats ; un skill tiers retenu s'ajoute au `harnais.manifest.json` du projet
+   (version épinglée), pas par copie directe.
 3. Si rien de pertinent, ou en cas de doute sur l'actualité d'un outil/MCP pour ce
    provider : recherche web ciblée (`WebSearch` natif, ou `perplexity-research` si
    configuré) — ne réponds pas de mémoire sur un écosystème qui évolue vite.
@@ -46,7 +46,7 @@ contenu qui deviendrait vite obsolète.
 
 - [ ] Build/compilation passe sans erreur.
 - [ ] Tests passent (via `/verify` si pas déjà fait dans le cycle de dev).
-- [ ] `security-audit` lancé — aucun secret en clair détecté.
+- [ ] Aucun secret en clair : `/security-review`, ou le skill optionnel `security-audit` s'il est installé.
 - [ ] Premier déploiement, dépendance nouvellement ajoutée, ou changement à risque
       (réseau, système de fichiers, code non relu) : `sandbox-pretest` exécuté — build +
       tests passés en environnement isolé avant de toucher la cible réelle.

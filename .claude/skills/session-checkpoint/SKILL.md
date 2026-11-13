@@ -12,8 +12,8 @@ ne fait qu'exposer un fichier qui n'a pas été mis à jour.
 
 ## Quand se déclencher
 
-- À la fin d'une étape significative (ex: fin d'une phase de `dev-cycle`, une skill
-  entière terminée, un bug résolu).
+- À la fin d'une étape significative (ex: une fonctionnalité ou une skill
+  entière terminée, un bug résolu), ou quand le hook `checkpoint-nudge` le rappelle.
 - Avant une pause connue (l'utilisateur annonce qu'il va fermer la session).
 - Quand le contexte de la conversation devient long et qu'un point de repère clair
   aiderait une reprise ultérieure.
@@ -27,7 +27,8 @@ checkpoint après une simple question/réponse n'apporte rien.
 
 ## Ce qui va dans `SESSION.md` (court, toujours à jour)
 
-Réécris (n'accumule pas) les sections :
+Objectif : moins de 60 lignes. Au-delà de 4 Ko, le hook de démarrage n'injecte que le
+début et signale le dépassement. Réécris (n'accumule pas) les sections :
 - **Niveau / statut actuel** : une ou deux phrases sur où en est le projet dans son
   ensemble.
 - **Fait** : liste courte, à haut niveau — pas le détail de comment, juste le quoi.

@@ -1,6 +1,7 @@
 ---
 name: harnais-report
 description: Agrège .claude/harnais-metrics.jsonl (le journal d'usage local des hooks et skills du socle) en un rapport lisible — comptage par source, hooks/skills les plus invoqués, ratio block/allow du garde-fou, fréquence des arrêts durs. Triggers on "rapport d'usage", "harnais-report", "stats du harnais", "stats d'utilisation".
+disable-model-invocation: true
 ---
 
 # harnais-report

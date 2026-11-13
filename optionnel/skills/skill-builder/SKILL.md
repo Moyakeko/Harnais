@@ -1,6 +1,7 @@
 ---
 name: skill-builder
 description: Meta-skill for creating new SKILL.md files consistent with this harness's conventions, and for deriving a lighter variant of the whole harness for a different context (e.g. a school-only setup). Triggers on "crée une skill", "skill-builder", "fais un socle plus léger pour X", "dérive un harnais pour...".
+disable-model-invocation: true
 ---
 
 # skill-builder

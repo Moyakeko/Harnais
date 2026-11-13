@@ -1,6 +1,7 @@
 ---
 name: sandbox-pretest
 description: Exécute un changement, une app ou du code de provenance incertaine dans un environnement isolé (Docker de préférence, fallback dégradé sinon) AVANT un déploiement réel ou une exécution sur la machine. Triggers on "sandbox", "pré-test", "teste en isolation", "sandbox-pretest", avant l'étape de déploiement de deploy-checklist (premier déploiement ou changement à risque), à l'installation de dépendances avec scripts d'install de source peu familière, ou avant d'exécuter du code généré/cloné que l'utilisateur n'a pas relu.
+disable-model-invocation: true
 ---
 
 # sandbox-pretest
